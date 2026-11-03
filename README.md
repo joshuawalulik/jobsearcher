@@ -1,5 +1,8 @@
 # JobSearcher
 
+[![CI](https://github.com/joshuawalulik/jobsearcher/actions/workflows/ci.yml/badge.svg)](https://github.com/joshuawalulik/jobsearcher/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A personal job-search pipeline that scrapes applicant-tracking-system boards,
 scores every posting against a keyword profile with a **fully explainable,
 deterministic** scoring engine, and tracks applications end to end — from
@@ -7,6 +10,10 @@ deterministic** scoring engine, and tracks applications end to end — from
 
 Built for one user, running locally: FastAPI + HTMX + SQLite, no ORM, no
 Docker, no background queue — just a launchd timer and plain SQL.
+
+![The match feed with an expanded "why ranked here" score breakdown](docs/feed.png)
+
+![The application tracker board](docs/tracker.png)
 
 ## Why it exists
 
@@ -170,3 +177,10 @@ Optional pieces:
 Multi-user, auth, deployment, Workday/Taleo scraping (no public JSON APIs),
 and LLM-based ranking. The last one is a feature: an LLM can help you *apply*
 (that's what the MCP server is for) — it doesn't get to decide what you see.
+
+## A note on the history
+
+This repo is the scrubbed public mirror of a private repo that holds my real
+profile and application data, so its commit log starts at the first public
+release rather than at the project's beginning. Features land here as one
+branch/PR per feature after they ship privately.
