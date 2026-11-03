@@ -51,7 +51,7 @@ YAML schema:
       - {label: Frontend, items: "React, TypeScript"}
     education:
       - {school: School of Business, State University,
-         where: "Tempe, AZ", dates: May 2023,   # dates optional, right-aligned
+         where: "Springfield, NY", dates: May 2023,  # dates optional, right-aligned
          lines: [ ... ]}
     certifications: optional, [{name: ...}]     # legacy; v20 builds use additional
     additional:                    # optional (bank v20); labeled lines, rendered last
@@ -116,6 +116,21 @@ def _set_doc_defaults(doc, body_pt: float) -> None:
     defaults.insert(0, rpr_default)
 
 
+_EMAIL_RE = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.-]+$")
+_URL_RE = re.compile(r"^(https?://)?[\w-]+(\.[\w-]+)+(/\S*)?$")
+
+
+def _link_url(piece: str) -> str | None:
+    """mailto:/https:// target for a contact or link token, else None.
+    Deterministic: an email, or a spaceless domain-looking token."""
+    piece = piece.strip()
+    if _EMAIL_RE.match(piece):
+        return "mailto:" + piece
+    if _URL_RE.match(piece):
+        return piece if piece.startswith("http") else "https://" + piece
+    return None
+
+
 def _run(para, text, *, size, bold=False, caps=False):
     r = para.add_run(text)
     r.font.name = FONT
@@ -124,6 +139,31 @@ def _run(para, text, *, size, bold=False, caps=False):
     if caps:
         r.font.all_caps = True
     return r
+
+
+def _link_run(para, text, url, *, size):
+    """A run wrapped in a real w:hyperlink (clickable in Word/Docs),
+    styled exactly like body text — no blue, no underline."""
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    r_id = para.part.relate_to(url, RT.HYPERLINK, is_external=True)
+    hyper = para._p.makeelement(qn("w:hyperlink"), {})
+    hyper.set(qn("r:id"), r_id)
+    run = _run(para, text, size=size)
+    hyper.append(run._r)  # reparents the w:r under the hyperlink
+    para._p.append(hyper)
+
+
+def _contact_line(p, contact, *, size):
+    """Contact pieces split on •; email and URL pieces become links."""
+    pieces = contact.split("•")
+    for i, piece in enumerate(pieces):
+        if i:
+            _run(p, "  •  ", size=size)
+        url = _link_url(piece)
+        if url:
+            _link_run(p, piece.strip(), url, size=size)
+        else:
+            _run(p, piece.strip(), size=size)
 
 
 def _para(doc, *, before=0, after=0, center=False):
@@ -157,14 +197,18 @@ def _section_header(doc, text):
     ppr.append(pbdr)
 
 
-def _role_line(doc, title, rest, dates, *, size):
-    """Bold title, regular ' | Company | City', right-tabbed dates."""
+def _role_line(doc, title, rest, dates, *, size, link=None):
+    """Bold title, regular ' | Company | City', right-tabbed dates —
+    or a clickable right-tabbed link in the dates slot."""
     p = _para(doc, after=1)
     _right_tab(p)
     _run(p, title, size=size, bold=True)
     if rest:
         _run(p, rest, size=size)
-    if dates:
+    if link:
+        _run(p, "\t", size=size)
+        _link_run(p, link, _link_url(link) or link, size=size)
+    elif dates:
         _run(p, "\t" + dates, size=size)
     return p
 
@@ -196,7 +240,7 @@ def build_docx(data: dict, out_path: Path) -> None:
     p = _para(doc, center=True)
     _run(p, data["name"], size=NAME_PT, bold=True, caps=True)
     p = _para(doc, before=1, center=True)
-    _run(p, data["contact"], size=body)
+    _contact_line(p, data["contact"], size=body)
 
     if data.get("summary"):
         _section_header(doc, "Summary")
@@ -217,7 +261,7 @@ def build_docx(data: dict, out_path: Path) -> None:
             _role_line(
                 doc, proj["name"],
                 f" | {proj['tech']}" if proj.get("tech") else "",
-                proj.get("link") or proj.get("dates"), size=body,
+                proj.get("dates"), size=body, link=proj.get("link"),
             )
             for b in proj["bullets"]:
                 _bullet(doc, b, size=body)
@@ -259,8 +303,14 @@ def build_html(data: dict) -> str:
     e = html.escape
     body = float(data.get("body_pt", 11.5))
 
+    def linkify(piece: str) -> str:
+        url = _link_url(piece)
+        text = e(piece.strip())
+        return f'<a href="{e(url)}">{text}</a>' if url else text
+
+    contact = "  •  ".join(linkify(p) for p in data["contact"].split("•"))
     parts = [f'<h1>{e(data["name"])}</h1>',
-             f'<p class="contact">{e(data["contact"])}</p>']
+             f'<p class="contact">{contact}</p>']
     if data.get("summary"):
         parts += ["<h2>Summary</h2>", f"<p>{e(data['summary'])}</p>"]
     parts.append("<h2>Experience</h2>")
@@ -275,7 +325,8 @@ def build_html(data: dict) -> str:
         parts.append("<h2>Projects</h2>")
         for proj in data["projects"]:
             tech = f" | {e(proj['tech'])}" if proj.get("tech") else ""
-            right = e(proj.get("link") or proj.get("dates") or "")
+            right = (linkify(proj["link"]) if proj.get("link")
+                     else e(proj.get("dates") or ""))
             parts.append(
                 f'<div class="row role"><span><b>{e(proj["name"])}</b>{tech}</span>'
                 f"<span>{right}</span></div>"
@@ -317,6 +368,7 @@ def build_html(data: dict) -> str:
           text-transform: uppercase; border-bottom: 1px solid #000;
           padding-bottom: 1px; }}
     p {{ margin: 0; }}
+    a {{ color: inherit; text-decoration: none; }}
     .row {{ display: flex; justify-content: space-between; }}
     .role {{ margin: 0 0 1pt; }}
     ul {{ margin: 0; padding-left: 16pt; }}

@@ -137,6 +137,32 @@ def test_project_bullets_are_checked():
     assert resume_build.check(EXTENDED) == []
 
 
+def test_urls_render_as_hyperlinks(tmp_path):
+    out = tmp_path / "resume.docx"
+    resume_build.build_docx(EXTENDED, out)
+    d = docx.Document(out)
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    targets = {r.target_ref for r in d.part.rels.values() if r.reltype == RT.HYPERLINK}
+    assert "https://github.com/user/jobsearcher" in targets
+    assert "mailto:alex@example.com" in targets
+    # Hyperlink runs still read as normal paragraph text (same layout).
+    texts = [p.text for p in d.paragraphs]
+    assert "New York, NY  •  alex@example.com" in texts
+    proj = next(t for t in texts if t.startswith("JobSearcher"))
+    assert proj.endswith("\tgithub.com/user/jobsearcher")
+    html_text = resume_build.build_html(EXTENDED)
+    assert '<a href="https://github.com/user/jobsearcher">github.com/user/jobsearcher</a>' in html_text
+    assert '<a href="mailto:alex@example.com">alex@example.com</a>' in html_text
+
+
+def test_link_url_is_conservative():
+    assert resume_build._link_url("linkedin.com/in/alex") == "https://linkedin.com/in/alex"
+    assert resume_build._link_url("https://github.com/x") == "https://github.com/x"
+    assert resume_build._link_url("alex@example.com") == "mailto:alex@example.com"
+    for plain in ("New York, NY", "(555) 555-5555", "Springfield, NY", "May 2023"):
+        assert resume_build._link_url(plain) is None
+
+
 def test_education_dates_render_right_tabbed(tmp_path):
     out = tmp_path / "resume.docx"
     resume_build.build_docx(SAMPLE, out)
