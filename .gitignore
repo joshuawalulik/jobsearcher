@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+config/secrets.yaml
+.DS_Store
+ResumesAndJobSearch/
+config/profile.yaml

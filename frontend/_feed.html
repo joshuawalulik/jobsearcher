@@ -1,0 +1,11 @@
+<div id="feed">
+  <p class="status">
+    {% if summary %}<strong>{{ summary }}</strong> {% endif %}
+    {{ jobs | length }} match{{ 'es' if jobs | length != 1 }} shown.
+  </p>
+  {% for job in jobs %}
+    {% include "_card.html" %}
+  {% else %}
+    <p class="empty">No matches. Sweep some boards or loosen the profile.</p>
+  {% endfor %}
+</div>

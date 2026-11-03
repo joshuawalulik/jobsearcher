@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set active = 'tracker' %}
+{% block title %}Tracker — Job Search Tool{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Tracker</h1>
+  <button class="sync-email" hx-post="/email/sync" hx-target="#email-sync-status"
+          hx-swap="outerHTML" hx-disabled-elt="this"
+          hx-indicator="#email-ind">Sync email</button>
+  <span id="email-ind" class="htmx-indicator hint">Checking inbox&hellip;</span>
+</header>
+<p id="email-sync-status" class="status"></p>
+<details class="add-job">
+  <summary>Add a job manually</summary>
+  <p class="hint">For jobs found outside the tool (referral, LinkedIn, a company
+  not on the watchlist). Goes straight to the considering lane — scored against
+  your profile (paste the JD for a meaningful number), but never gated or swept.</p>
+  <form class="fetch-row" hx-get="/jobs/lookup" hx-target="#add-job-form"
+        hx-swap="outerHTML" hx-disabled-elt="find button">
+    <input type="url" name="url"
+           placeholder="Paste a Greenhouse / Lever / Ashby job URL to auto-fill&hellip;">
+    <button type="submit">Fetch</button>
+  </form>
+  {% include "_add_job_form.html" %}
+</details>
+{% include "_board.html" %}
+<div id="modal"></div>
+<script>
+  // Card clicks open the detail modal — except clicks meant for the
+  // card's own controls (job link, lane select, untrack, details form).
+  function opensAppModal(evt) {
+    return !evt.target.closest("a, button, select, input, textarea, label, summary, details");
+  }
+  document.addEventListener("keydown", function (evt) {
+    if (evt.key === "Escape") {
+      var overlay = document.querySelector(".modal-overlay");
+      if (overlay) overlay.remove();
+    }
+  });
+  // Replacing all of #board (lane select, suggestion accept/dismiss,
+  // untrack) destroys the browser's scroll anchor and the page jumps to
+  // the bottom — pin the scroll position across those swaps.
+  var boardScroll = null;
+  function rememberBoardScroll(evt) {
+    if (evt.detail.target && evt.detail.target.id === "board") boardScroll = window.scrollY;
+  }
+  document.addEventListener("htmx:beforeSwap", rememberBoardScroll);
+  document.addEventListener("htmx:oobBeforeSwap", rememberBoardScroll);
+  document.addEventListener("htmx:afterSettle", function () {
+    if (boardScroll !== null) {
+      window.scrollTo(0, boardScroll);
+      boardScroll = null;
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+<div id="rejected-groups">
+  {% for group in groups %}
+  <details class="gate-group" {% if q %}open{% endif %}>
+    <summary><strong>{{ group.gate }}</strong> — {{ group.total }} rejection{{ 's' if group.total != 1 }}</summary>
+    {% if group.rows | length < group.total %}
+    <p class="hint">Showing first {{ group.rows | length }} of {{ group.total }}.</p>
+    {% endif %}
+    <table>
+      <thead><tr><th>Title</th><th>Company</th><th>Location</th><th>Reason</th></tr></thead>
+      <tbody>
+        {% for row in group.rows %}
+        <tr>
+          <td>{{ row.title }}</td>
+          <td>{{ row.company }}</td>
+          <td>{{ row.location or '—' }}</td>
+          <td class="reason">{{ row.reason }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% else %}
+  <p class="empty">{% if q %}No rejections from companies matching &ldquo;{{ q }}&rdquo;.{% else %}No gate-rejected jobs.{% endif %}</p>
+  {% endfor %}
+</div>

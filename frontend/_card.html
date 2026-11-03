@@ -1,0 +1,34 @@
+<article class="card">
+  <div class="card-head">
+    <span class="score">{{ '%g' % job.score }}</span>
+    <div class="card-title">
+      <h2>{% if job.url %}<a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>{% else %}{{ job.title }}{% endif %}</h2>
+      <p class="meta">
+        {{ job.company }}
+        {% if job.location %} · {{ job.location }}{% endif %}
+        {% if job.posted_at %} · posted {{ job.posted_at[:10] }}{% endif %}
+      </p>
+    </div>
+    {% if job.tracked %}
+    {# job.tracked is the application's lane — the pill mirrors the tracker. #}
+    <a class="tracked" href="/tracker">{{ job.tracked | capitalize }}</a>
+    {% else %}
+    <button class="track" hx-post="/jobs/{{ job.id }}/track"
+            hx-swap="outerHTML">Track</button>
+    {% endif %}
+    <button class="dismiss" hx-post="/jobs/{{ job.id }}/dismiss"
+            hx-target="closest article" hx-swap="delete">Dismiss</button>
+  </div>
+  {% if job.description %}
+  <details class="breakdown jd">
+    <summary>Description</summary>
+    <div class="jd-text">{{ job.description }}</div>
+  </details>
+  {% endif %}
+  {% if job.breakdown %}
+  <details class="breakdown">
+    <summary>Why ranked here</summary>
+    {% with bd = job.breakdown %}{% include "_breakdown.html" %}{% endwith %}
+  </details>
+  {% endif %}
+</article>

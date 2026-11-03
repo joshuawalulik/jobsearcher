@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Twice-daily job sweep + rescore. Absolute paths on purpose: this is a
+  single-user tool pinned to this machine and launchd expands nothing.
+
+  Install / update:
+    cp launchd/com.jobsearcher.sweep.plist ~/Library/LaunchAgents/
+    launchctl bootout gui/$(id -u)/com.jobsearcher.sweep 2>/dev/null || true
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.jobsearcher.sweep.plist
+
+  Manual run:   launchctl kickstart gui/$(id -u)/com.jobsearcher.sweep
+  Uninstall:    launchctl bootout gui/$(id -u)/com.jobsearcher.sweep
+  Logs:         data/sweep.log
+
+  If the Mac is asleep at a scheduled time, launchd runs the job on wake
+  (missed intervals coalesce into one run). Powered off = skipped.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobsearcher.sweep</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/you/jobsearcher/.venv/bin/python</string>
+        <string>-m</string>
+        <string>autosweep</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/you/jobsearcher</string>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>8</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>16</integer>
+            <key>Minute</key>
+            <integer>30</integer>
+        </dict>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/you/jobsearcher/data/sweep.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/you/jobsearcher/data/sweep.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

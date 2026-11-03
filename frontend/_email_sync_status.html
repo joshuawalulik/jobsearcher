@@ -1,0 +1,9 @@
+{# /email/sync response: status line for #email-sync-status, plus an
+   out-of-band board refresh (lanes set) so new suggestions show up. #}
+<p id="email-sync-status" class="status {{ 'error' if error }}">
+  {{ error or message }}
+</p>
+{% if lanes %}
+{% set oob = true %}
+{% include "_board.html" %}
+{% endif %}

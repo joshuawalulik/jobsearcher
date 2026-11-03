@@ -1,0 +1,26 @@
+{# Feed-header sweep status. Always rendered (even empty) so the /sweep
+   response can replace it out-of-band by id. #}
+<div id="sweep-stamp"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if last_sweep %}
+  <p class="hint sweep-stamp">
+    Boards last swept {{ last_sweep.local }} ({{ last_sweep.ago }}) ·
+    scheduled daily at 8:30 &amp; 16:30.
+    {%- if last_run %}
+    Last sweep: {{ last_run.companies }} companies,
+    {{ last_run.jobs_seen }} jobs ({{ last_run.jobs_new }} new)
+    {%- if last_run.rescore_total is not none %} ·
+    rescored {{ last_run.rescore_total }}: {{ last_run.rescore_passed }} passed gates,
+    {{ last_run.rescore_rejected }} rejected
+    {%- endif %}.
+    {%- endif %}
+  </p>
+  {% if last_run and last_run.errors %}
+  <details class="hint sweep-errors">
+    <summary>{{ last_run.errors | length }} sweep error{{ 's' if last_run.errors | length != 1 }}</summary>
+    <ul>
+      {% for error in last_run.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  {% endif %}
+</div>

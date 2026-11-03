@@ -1,0 +1,40 @@
+<div id="add-job-form">
+  {% set v = v | default({}) %}
+  {% if lookup_error %}<p class="status error">{{ lookup_error }}</p>{% endif %}
+  {% if lookup_note %}<p class="status ok">{{ lookup_note }}</p>{% endif %}
+  {% if existing %}
+  <p class="status">
+    Already in the tool: &ldquo;{{ existing.title }}&rdquo; at {{ existing.company }}.
+    {% if existing.tracked %}
+    It's already <a href="/tracker">on the tracker</a>.
+    {% else %}
+    <button hx-post="/jobs/{{ existing.id }}/track" hx-swap="outerHTML">Track it</button>
+    {% endif %}
+  </p>
+  {% if existing.gate_failed %}
+  <p class="hint">Heads up — this posting is gate-rejected ({{ existing.gate_reason }}).
+  It never made the matches feed, but tracking it scores it like any other job.</p>
+  {% endif %}
+  {% else %}
+  <form method="post" action="/jobs/manual">
+    <div class="grid">
+      <label>Company *
+        <input name="company" value="{{ v.company or '' }}" required>
+      </label>
+      <label>Title *
+        <input name="title" value="{{ v.title or '' }}" required>
+      </label>
+      <label>URL
+        <input name="url" value="{{ v.url or '' }}" placeholder="https://&hellip;">
+      </label>
+      <label>Location
+        <input name="location" value="{{ v.location or '' }}">
+      </label>
+    </div>
+    <label>Description <small>optional — paste the JD so it's scored and in analytics</small>
+      <textarea name="description" rows="4">{{ v.description or '' }}</textarea>
+    </label>
+    <button class="save" type="submit">Add to tracker</button>
+  </form>
+  {% endif %}
+</div>

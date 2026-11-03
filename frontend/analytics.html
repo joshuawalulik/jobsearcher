@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% set active = 'analytics' %}
+{% block title %}Analytics — Job Search Tool{% endblock %}
+
+{% macro pct(row) -%}
+  {{ row.advanced }}/{{ row.applied }}{% if row.rate is not none %} ({{ row.rate }}%){% else %} —{% endif %}
+{%- endmacro %}
+
+{% macro meter_row(row) -%}
+<div class="meter-row">
+  <span class="meter-label">{{ row.label }}</span>
+  <div class="meter"><div class="meter-fill" style="width: {{ row.rate or 0 }}%"></div></div>
+  <span class="meter-value">{{ pct(row) }}</span>
+</div>
+{%- endmacro %}
+
+{% block content %}
+<header class="page-head">
+  <h1>Analytics</h1>
+</header>
+<p class="hint">Read-only aggregates over your {{ total_apps }} tracked application{{ 's' if total_apps != 1 }}.
+"Advanced" means the application ever reached interviewing or beyond, derived from
+the events history — a card that is rejected now but had an interview still counts.</p>
+
+<div class="kpis">
+  <div class="stat">
+    <span class="stat-label">Tracked</span>
+    <span class="stat-value">{{ summary.tracked }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Applied</span>
+    <span class="stat-value">{{ summary.applied }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Reply rate</span>
+    <span class="stat-value">{% if summary.reply_rate is not none %}{{ summary.reply_rate }}%{% else %}—{% endif %}</span>
+    <span class="stat-sub">{{ summary.advanced }} of {{ summary.applied }} advanced</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Offers</span>
+    <span class="stat-value">{{ summary.offers }}</span>
+  </div>
+</div>
+
+<section class="panel">
+  <h2>Funnel</h2>
+  <div class="funnel">
+    {% for lane in funnel.lanes %}
+    <div class="funnel-lane">
+      <span class="stat-label">{{ lane.name }}</span>
+      <span class="funnel-count{{ ' zero' if not lane.count }}">{{ lane.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="hint reached">Ever reached:
+    {% for step in funnel.reached %}{{ step.stage }} <strong>{{ step.count }}</strong>{{ " · " if not loop.last }}{% endfor %}
+  </p>
+</section>
+
+<section class="panel">
+  <h2>Reply rate by score band</h2>
+  <div class="meters">
+    {% for row in bands %}{{ meter_row(row) }}{% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Fast-apply effect</h2>
+  <div class="meters">
+    {% for row in speed.rows %}{{ meter_row(row) }}{% endfor %}
+  </div>
+  {% if speed.unknown %}
+  <p class="hint">{{ speed.unknown }} application{{ 's' if speed.unknown != 1 }} skipped
+  (missing applied date or first-seen date).</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Outcomes by resume version</h2>
+  {% if resumes %}
+  <table>
+    <thead><tr><th>Resume version</th><th class="num">Applied</th><th class="num">Advanced</th><th class="num">Offers</th><th class="num">Rejected</th></tr></thead>
+    <tbody>
+      {% for row in resumes %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td class="num">{{ row.applied }}</td>
+        <td class="num">{{ pct(row) }}</td>
+        <td class="num{{ ' zero' if not row.offers }}">{{ row.offers }}</td>
+        <td class="num{{ ' zero' if not row.dead }}">{{ row.dead }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No applications yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Keywords that advance</h2>
+  {% if keywords.rows %}
+  <table>
+    <thead><tr><th>Keyword</th><th class="num">In advanced ({{ keywords.advanced_total }})</th><th class="num">In stalled ({{ keywords.stalled_total }})</th></tr></thead>
+    <tbody>
+      {% for row in keywords.rows %}
+      <tr>
+        <td><code class="kw">{{ row.keyword }}</code></td>
+        <td class="num{{ ' zero' if not row.advanced }}">{{ row.advanced }}</td>
+        <td class="num{{ ' zero' if not row.stalled }}">{{ row.stalled }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Profile keywords (required + preferred) matched against the job
+  descriptions of applied jobs. Descriptions the scraper never captured count as
+  no match.</p>
+  {% else %}
+  <p class="empty">No keyword hits among applied jobs yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

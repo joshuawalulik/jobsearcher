@@ -1,0 +1,5 @@
+{# /sweep response: the refreshed feed (main swap target) plus an
+   out-of-band update of the header's sweep stamp. #}
+{% include "_feed.html" %}
+{% set oob = true %}
+{% include "_sweep_stamp.html" %}

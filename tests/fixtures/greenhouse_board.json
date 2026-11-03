@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "id": 4000001,
+      "title": "Senior Backend Engineer",
+      "updated_at": "2026-07-02T08:00:00-04:00",
+      "first_published": "2026-07-01T12:34:56-04:00",
+      "location": {"name": "New York, NY"},
+      "departments": [{"id": 12, "name": "Engineering"}],
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4000001",
+      "content": "&lt;p&gt;Build APIs in Python.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;FastAPI&lt;/li&gt;&lt;li&gt;SQLite&lt;/li&gt;&lt;/ul&gt;"
+    },
+    {
+      "id": 4000002,
+      "title": "Data Analyst",
+      "updated_at": "2026-07-02T23:15:00-05:00",
+      "location": null,
+      "departments": [],
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4000002"
+    },
+    {
+      "id": 4000003,
+      "updated_at": "2026-07-04T10:00:00-04:00",
+      "location": {"name": "Remote"},
+      "departments": [{"id": 13, "name": "Design"}],
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/4000003",
+      "content": "&lt;p&gt;No title on this one.&lt;/p&gt;"
+    }
+  ],
+  "meta": {"total": 3}
+}

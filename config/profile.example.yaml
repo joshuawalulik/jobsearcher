@@ -1,0 +1,220 @@
+# Keyword profile: gates, scoring weights, and the company watchlist.
+# Copy to config/profile.yaml and edit — all tunable values live here,
+# never in code. Every section below is required; values are examples.
+
+# A few well-known boards so the first sweep works out of the box.
+# Add your own with `python -m scrapers.discover "Company Name" --add`,
+# which probes all three APIs and appends verified boards here.
+# Verified 2026-07-16: every slug returned 200 with live jobs from its ATS API.
+companies:
+  # --- Greenhouse ---
+  - name: Datadog
+    ats: greenhouse
+    slug: datadog
+  - name: MongoDB
+    ats: greenhouse
+    slug: mongodb
+  - name: Pinterest
+    ats: greenhouse
+    slug: pinterest
+  - name: FanDuel
+    ats: greenhouse
+    slug: fanduel
+  # --- Lever ---
+  - name: Spotify
+    ats: lever
+    slug: spotify
+  # --- Ashby ---
+  - name: Notion
+    ats: ashby
+    slug: notion
+  # Optional per-company score multiplier (default 1.0):
+  # - name: Dream Co
+  #   ats: greenhouse
+  #   slug: dreamco
+  #   weight: 1.25
+
+gates:                # Stage 1 — drop, don't score
+  excluded_title_keywords:   # title substrings that disqualify outright
+    - recruiter
+    - staffing
+    - staff
+    - principal
+    - lead
+    - manager
+    - director
+    - intern
+    - contract
+  work_type:
+    mine: hybrid            # remote | hybrid | onsite
+    reject_conflicts: true  # drop postings that conflict (e.g. onsite-only)
+  allowed_locations:        # empty = any; else substring allowlist
+    - New York
+    - NYC
+    - Distributed           # Elastic-style remote tag
+    # US-remote only — bare "Remote" let through Remote-India/Canada/etc.
+    # Entries below cover the real variants observed in the wild;
+    # multi-country strings that include a US option still pass.
+    - Remote - US           # also 'Remote - USA', 'Remote - US: ...'
+    - Remote - U.S.         # 'Remote - U.S.A.'
+    - Remote - United States
+    - Remote US             # also 'Remote USA'
+    - Remote U.S.
+    - Remote, US            # also 'Remote, USA', 'Remote, US, Texas'
+    - Remote, United States
+    - Remote-US             # also 'Remote-USA'
+    - US-Remote
+    - US - Remote
+    - US Remote
+    - USA Remote
+    - U.S. Remote
+    - USA, Remote           # 'Texas, USA, Remote' state-list style
+    - United States - Remote
+    - United States (Remote)
+    - Remote (US)
+    - Remote (U.S.)
+    - Remote (United States # '(United States | Canada)' etc.
+    - Remote in the US
+    - Remote within         # 'Remote within (Canada or) United States'
+    - Remote-Friendly, United States
+  clearance_keywords:       # security-clearance demands you can't meet
+    - TS/SCI
+    - "top secret"
+    - polygraph
+  # Drop postings first posted more than this many days ago. 0 disables —
+  # the delisted gate still drops dead links via last_seen.
+  max_posting_age_days: 0
+  # Drop jobs the sweep hasn't seen on their board for this many days —
+  # the company delisted them, so the link is dead. 0 disables.
+  delisted_after_days: 2
+  # Drop postings whose description demands more years of experience
+  # than this ("8+ years ... experience"). 0 disables the gate.
+  max_required_experience_years: 6
+
+scoring:              # Stage 2 — weighted 0–100 for gate survivors
+  target_titles:
+    - "Software Engineer"
+    - "Full Stack Engineer"
+    - "Backend Engineer"
+  title_match_weight: 30
+  exact_title_bonus: 15
+  # NOTE: short keywords (ai, api, rest, java, css) require word-boundary
+  # matching in score.py — naive substring would hit "maintain", "javascript",
+  # "restaurant", etc.
+  required_keywords:
+    - python
+    - react
+    - api
+  required_keyword_weight: 5
+  preferred_keywords:
+    - next.js
+    - typescript
+    - graphql
+    - microservices
+    - kafka
+    - ci/cd
+    - kubernetes
+    - aws
+  preferred_keyword_weight: 2
+  negative_keywords:
+    - php
+    - wordpress
+    - clearance
+  negative_keyword_weight: -10
+  must_haves: []              # scored jobs missing any of these get the penalty
+  missing_must_have_penalty: -20
+  seniority:
+    target: mid
+    years_to_level:   # description years decide the level; title markers only when no years stated
+      junior_max: 1   # required years <= this -> junior
+      senior_min: 6   # required years >= this -> senior (between -> mid)
+    multipliers:
+      intern: 0.2
+      junior: 0.75
+      mid: 1.0
+      senior: 0.5
+      staff: 0.4
+      principal: 0.3
+  experience:           # penalize demands beyond your years (gate caps the extreme)
+    mine_years: 3
+    over_penalty_per_year: -6   # per required year beyond mine_years
+  sparse_description:   # confidence haircut for title-only stubs
+    min_chars: 400
+    multiplier: 0.85
+
+analytics:            # read-only reporting knobs
+  score_band_edges: [40, 50]    # reply-rate bands: <40, 40–50, 50+
+  fast_apply_hours: 48          # "applied fast" threshold vs first_seen
+
+workflow:              # local application workflow (/apply + apply_run)
+  # Folder that holds per-company application folders under Applications/.
+  home: /Users/you/Documents/JobSearch
+
+scraper:
+  delay_seconds: 1      # polite gap between companies on a sweep
+  timeout_seconds: 10
+  user_agent: "personal-job-tool (you@example.com)"
+
+email:                # inbox → tracker suggestions (creds in git-ignored config/secrets.yaml)
+  enabled: true       # needs config/secrets.yaml (the UI explains when it's missing)
+  imap_host: imap.gmail.com
+  folder: INBOX
+  lookback_days: 14
+  # Only these lanes are matched against the inbox (considering/ready =
+  # not applied yet; rejected/skipped are already terminal).
+  sync_lanes: [applied, interviewing, offer]
+  # Every bucket is scored (each body phrase hit = 1, each subject hit =
+  # subject_weight) after quoted reply/forward history is stripped; the
+  # highest-scoring bucket wins and ties keep this top-to-bottom order —
+  # rejected first, so a pure "after your interview, unfortunately…"
+  # still reads as a rejection, while a scheduling email with one stray
+  # "unfortunately" no longer does. Case-insensitive substring match.
+  subject_weight: 2
+  classify:
+    rejected:
+      - not moving forward
+      - moving forward with other candidates
+      - pursue other candidates
+      - will not be proceeding
+      - unable to extend an offer
+      - position has been filled
+      - no longer under consideration
+      - regret to inform
+      - not been selected
+      - other qualified candidates
+      - best of luck in your search
+      - unfortunately
+    offer:
+      - pleased to extend
+      - pleased to offer
+      - offer letter
+      - formal offer
+      - extend an offer
+      - offer of employment
+    interviewing:
+      - technical interview
+      - interview with the team
+      - onsite
+      - coding challenge
+      - take-home
+      - schedule your interview
+      - hiring manager
+      - invite you to interview
+      - next round
+      - technical assessment
+      - video interview
+      - phone screen
+      - recruiter screen
+      - initial call
+      - schedule a call
+      - your availability
+      - introductory call
+  # Mail matching none of the buckets still surfaces as a plain "reply
+  # received" suggestion when it looks application-related — this gate
+  # keeps company newsletters and marketing out of the tracker.
+  reply_markers:
+    - your application
+    - thank you for applying
+    - application to
+    - your candidacy
+    - application status

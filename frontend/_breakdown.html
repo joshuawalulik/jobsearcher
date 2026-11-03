@@ -1,0 +1,43 @@
+{# Score breakdown list; expects `bd` (parsed score_breakdown dict).
+   Newer breakdowns carry per-component categories and keyword coverage:
+   group them with subtotals so required-stack fit vs nice-to-have
+   padding is visible at a glance. Pre-category breakdowns render flat. #}
+{% if bd.components and bd.components[0].category is defined %}
+<ul>
+  {% for key, label in [('title', 'Title'), ('required', 'Required keywords'),
+                        ('preferred', 'Preferred keywords'), ('negative', 'Negative keywords'),
+                        ('must-have', 'Must-haves'), ('experience', 'Experience')] %}
+  {% set items = bd.components | selectattr('category', 'equalto', key) | list %}
+  {% set cov = bd.coverage.get(key) if bd.coverage is defined else none %}
+  {% if items or cov %}
+  {% set pts = items | sum(attribute='points') %}
+  <li class="cat-head">
+    <span class="pts {{ 'neg' if pts < 0 else ('zero' if pts == 0 else 'pos') }}">{{ '%+g' % pts }}</span>
+    <span>{{ label }}{% if cov %} <small class="cov">{{ cov.matched | length }} of {{ cov.matched | length + cov.missing | length }} matched</small>{% endif %}</span>
+  </li>
+  {% for c in items %}
+  <li class="cat-item"><span class="pts {{ 'neg' if c.points < 0 else 'pos' }}">{{ '%+g' % c.points }}</span> {{ c.reason }}</li>
+  {% endfor %}
+  {% if key == 'required' and cov and cov.missing %}
+  <li class="cat-item missing"><span class="pts"></span> missing: {{ cov.missing | join(', ') }}</li>
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+  <li class="subtotal"><span class="pts">= {{ '%g' % bd.subtotal }}</span> subtotal</li>
+  {% for m in bd.multipliers %}
+  <li><span class="pts mult">&times;{{ '%g' % m.factor }}</span> {{ m.reason }}</li>
+  {% endfor %}
+  <li class="subtotal"><span class="pts">= {{ '%g' % bd.score }}</span> final score (seniority: {{ bd.seniority }})</li>
+</ul>
+{% else %}
+<ul>
+  {% for c in bd.components %}
+  <li><span class="pts {{ 'neg' if c.points < 0 else 'pos' }}">{{ '%+g' % c.points }}</span> {{ c.reason }}</li>
+  {% endfor %}
+  <li class="subtotal"><span class="pts">= {{ '%g' % bd.subtotal }}</span> subtotal</li>
+  {% for m in bd.multipliers %}
+  <li><span class="pts mult">&times;{{ '%g' % m.factor }}</span> {{ m.reason }}</li>
+  {% endfor %}
+  <li class="subtotal"><span class="pts">= {{ '%g' % bd.score }}</span> final score (seniority: {{ bd.seniority }})</li>
+</ul>
+{% endif %}

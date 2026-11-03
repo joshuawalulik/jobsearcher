@@ -1,0 +1,73 @@
+{# Full application detail, loaded into #modal on card click. Expects
+   `a` (application dict with parsed breakdown). Read-only — editing
+   stays on the card; closes on the X, a click outside, or Escape. #}
+<div class="modal-overlay" onclick="if (event.target === this) this.remove()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="{{ a.title }}">
+    <button class="modal-close" type="button" aria-label="Close"
+            onclick="this.closest('.modal-overlay').remove()">&times;</button>
+    <h2>{{ a.title }}</h2>
+    <p class="meta">
+      {{ a.company }}
+      {% if a.location %} · {{ a.location }}{% endif %}
+      {% if a.score is not none %} · score {{ '%g' % a.score }}{% endif %}
+    </p>
+    <p class="modal-status">
+      <span class="tracked">{{ a.lane | capitalize }}</span>
+      {% if a.applied_at %} · applied {{ a.applied_at[:10] }}{% endif %}
+      · tracked since {{ a.created_at[:10] }}
+      {% if a.url %} · <a href="{{ a.url }}" target="_blank" rel="noopener">Open job posting &nearr;</a>{% endif %}
+    </p>
+    <dl class="modal-details">
+      <dt>Resume version</dt><dd>{{ a.resume_version or '—' }}</dd>
+      <dt>Next action</dt>
+      <dd>{{ a.next_action or '—' }}{% if a.next_action_due %} <span class="due">due {{ a.next_action_due }}</span>{% endif %}</dd>
+      <dt>Notes</dt><dd>{{ a.notes or '—' }}</dd>
+    </dl>
+    {% if a.suggestions or a.email_replies %}
+    <div class="email-history">
+      <p class="hint">Email replies</p>
+      <ul>
+        {% for r in a.suggestions %}
+        <li><span class="pending-pill">pending</span>
+          {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
+          {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
+          <span class="suggestion-mail">{{ r.from_addr or '?' }} · {{ r.reason }}
+            {%- if r.suggested_lane %} &rarr; suggests {{ r.suggested_lane }}{% endif %}</span>
+          {% if r.body %}
+          <details class="email-body">
+            <summary>Full email</summary>
+            <pre>{{ r.body }}</pre>
+          </details>
+          {% endif %}</li>
+        {% endfor %}
+        {% for r in a.email_replies %}
+        <li>{{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
+          {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
+          <span class="suggestion-mail">{{ r.from_addr or '?' }} · {{ r.reason }}
+            {%- if r.suggested_lane %} &rarr; moved to {{ r.suggested_lane }}{% endif %}</span>
+          {% if r.body %}
+          <details class="email-body">
+            <summary>Full email</summary>
+            <pre>{{ r.body }}</pre>
+          </details>
+          {% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% if a.breakdown %}
+    <details class="breakdown" open>
+      <summary>Score breakdown</summary>
+      {% with bd = a.breakdown %}{% include "_breakdown.html" %}{% endwith %}
+    </details>
+    {% endif %}
+    {% if a.description %}
+    <details class="breakdown jd" open>
+      <summary>Description</summary>
+      <div class="jd-text">{{ a.description }}</div>
+    </details>
+    {% else %}
+    <p class="hint">No saved job description.</p>
+    {% endif %}
+  </div>
+</div>

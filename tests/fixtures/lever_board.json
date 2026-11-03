@@ -1,0 +1,42 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "text": "Senior Backend Engineer",
+    "categories": {
+      "location": "Remote - US",
+      "team": "Platform",
+      "commitment": "Full-time"
+    },
+    "hostedUrl": "https://jobs.lever.co/acme/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "applyUrl": "https://jobs.lever.co/acme/a1b2c3d4-e5f6-7890-abcd-ef1234567890/apply",
+    "descriptionPlain": "Build and scale our core APIs. Python, Postgres, AWS.",
+    "description": "<div>Build and scale our core APIs. Python, Postgres, AWS.</div>",
+    "lists": [
+      {
+        "text": "Requirements",
+        "content": "<li>5+ years with <b>Python</b></li><li>Postgres &amp; AWS</li>"
+      },
+      {
+        "text": "Nice to have",
+        "content": "<li>Kubernetes</li>"
+      }
+    ],
+    "additionalPlain": "We offer equity and full benefits.",
+    "createdAt": 1720000000000
+  },
+  {
+    "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+    "text": "Mystery Role",
+    "descriptionPlain": ""
+  },
+  {
+    "id": "c3d4e5f6-a7b8-9012-cdef-345678901234",
+    "categories": {
+      "location": "New York, NY",
+      "team": "Design"
+    },
+    "hostedUrl": "https://jobs.lever.co/acme/c3d4e5f6-a7b8-9012-cdef-345678901234",
+    "descriptionPlain": "This posting has no title and must be skipped.",
+    "createdAt": 1720000000000
+  }
+]

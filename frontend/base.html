@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Job Search Tool{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <nav>
+    <span class="brand">Job Search Tool</span>
+    <a href="/" {% if active == 'matches' %}class="active"{% endif %}>Matches</a>
+    <a href="/tracker" {% if active == 'tracker' %}class="active"{% endif %}>Tracker</a>
+    <a href="/analytics" {% if active == 'analytics' %}class="active"{% endif %}>Analytics</a>
+    <a href="/rejected" {% if active == 'rejected' %}class="active"{% endif %}>Rejected</a>
+    <a href="/dismissed" {% if active == 'dismissed' %}class="active"{% endif %}>Dismissed</a>
+    <a href="/profile" {% if active == 'profile' %}class="active"{% endif %}>Profile</a>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

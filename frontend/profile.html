@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% set active = 'profile' %}
+{% block title %}Profile — Job Search Tool{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Keyword profile</h1>
+</header>
+<p class="hint">Edits are written back to <code>config/profile.yaml</code> (comments preserved)
+and every job is re-scored on save.</p>
+{% if message %}<p class="status ok">{{ message }}</p>{% endif %}
+{% if error %}<p class="status error">{{ error }}</p>{% endif %}
+
+<form method="post" action="/profile" class="profile-form">
+  <section>
+    <h2>Company watchlist ({{ v['companies'].splitlines() | length }})</h2>
+    <label>Companies <small>one per line: Name | ats | slug [| weight] &nbsp;(ats: greenhouse, lever, or ashby;
+      weight is an optional score multiplier, e.g. 0.8 to down-weight an early-stage company).
+      Additions are swept at the next sweep; removals go inactive, their jobs age out.</small>
+      <textarea name="companies" rows="14">{{ v['companies'] }}</textarea>
+    </label>
+  </section>
+
+  <section>
+    <h2>Gates — drop, don't score</h2>
+    <div class="grid">
+      <label>Excluded title keywords <small>one per line</small>
+        <textarea name="gates.excluded_title_keywords" rows="12">{{ v['gates.excluded_title_keywords'] }}</textarea>
+      </label>
+      <label>Allowed locations <small>substring allowlist; empty = any</small>
+        <textarea name="gates.allowed_locations" rows="12">{{ v['gates.allowed_locations'] }}</textarea>
+      </label>
+      <div class="stack">
+        <label>My work type
+          <select name="gates.work_type.mine">
+            {% for wt in ['remote', 'hybrid', 'onsite'] %}
+            <option value="{{ wt }}" {% if v['gates.work_type.mine'] == wt %}selected{% endif %}>{{ wt }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="gates.work_type.reject_conflicts"
+                 {% if v['gates.work_type.reject_conflicts'] %}checked{% endif %}>
+          Reject work-type conflicts
+        </label>
+        <label>Clearance keywords <small>one per line</small>
+          <textarea name="gates.clearance_keywords" rows="4">{{ v['gates.clearance_keywords'] }}</textarea>
+        </label>
+        <label>Max posting age (days) <small>0 disables</small>
+          <input type="number" name="gates.max_posting_age_days" value="{{ v['gates.max_posting_age_days'] }}" min="0" required>
+        </label>
+        <label>Max required experience (years) <small>0 disables</small>
+          <input type="number" name="gates.max_required_experience_years" value="{{ v['gates.max_required_experience_years'] }}" min="0" required>
+        </label>
+        <label>Delisted after (days) <small>drop jobs gone from their board; 0 disables</small>
+          <input type="number" name="gates.delisted_after_days" value="{{ v['gates.delisted_after_days'] }}" min="0" required>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scoring — weighted 0–100</h2>
+    <div class="grid">
+      <label>Target titles <small>one per line</small>
+        <textarea name="scoring.target_titles" rows="9">{{ v['scoring.target_titles'] }}</textarea>
+      </label>
+      <label>Required keywords
+        <textarea name="scoring.required_keywords" rows="9">{{ v['scoring.required_keywords'] }}</textarea>
+      </label>
+      <label>Preferred keywords
+        <textarea name="scoring.preferred_keywords" rows="9">{{ v['scoring.preferred_keywords'] }}</textarea>
+      </label>
+      <label>Negative keywords
+        <textarea name="scoring.negative_keywords" rows="9">{{ v['scoring.negative_keywords'] }}</textarea>
+      </label>
+      <label>Must-haves <small>each missing one is penalized</small>
+        <textarea name="scoring.must_haves" rows="9">{{ v['scoring.must_haves'] }}</textarea>
+      </label>
+    </div>
+    <div class="grid weights">
+      <label>Title match weight
+        <input type="number" name="scoring.title_match_weight" value="{{ v['scoring.title_match_weight'] }}" required>
+      </label>
+      <label>Exact title bonus
+        <input type="number" name="scoring.exact_title_bonus" value="{{ v['scoring.exact_title_bonus'] }}" required>
+      </label>
+      <label>Required keyword weight
+        <input type="number" name="scoring.required_keyword_weight" value="{{ v['scoring.required_keyword_weight'] }}" required>
+      </label>
+      <label>Preferred keyword weight
+        <input type="number" name="scoring.preferred_keyword_weight" value="{{ v['scoring.preferred_keyword_weight'] }}" required>
+      </label>
+      <label>Negative keyword weight
+        <input type="number" name="scoring.negative_keyword_weight" value="{{ v['scoring.negative_keyword_weight'] }}" required>
+      </label>
+      <label>Missing must-have penalty
+        <input type="number" name="scoring.missing_must_have_penalty" value="{{ v['scoring.missing_must_have_penalty'] }}" required>
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Seniority &amp; sparse descriptions</h2>
+    <div class="grid weights">
+      <label>Target level
+        <select name="scoring.seniority.target">
+          {% for level in ['intern', 'junior', 'mid', 'senior', 'staff', 'principal'] %}
+          <option value="{{ level }}" {% if v['scoring.seniority.target'] == level %}selected{% endif %}>{{ level }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% for level in ['intern', 'junior', 'mid', 'senior', 'staff', 'principal'] %}
+      <label>&times; {{ level }}
+        <input type="number" step="0.05" name="scoring.seniority.multipliers.{{ level }}"
+               value="{{ v['scoring.seniority.multipliers.' + level] }}" required>
+      </label>
+      {% endfor %}
+      <label>Junior: years &le;
+        <input type="number" name="scoring.seniority.years_to_level.junior_max" value="{{ v['scoring.seniority.years_to_level.junior_max'] }}" min="0" required>
+      </label>
+      <label>Senior: years &ge;
+        <input type="number" name="scoring.seniority.years_to_level.senior_min" value="{{ v['scoring.seniority.years_to_level.senior_min'] }}" min="0" required>
+      </label>
+      <label>My experience (years)
+        <input type="number" name="scoring.experience.mine_years" value="{{ v['scoring.experience.mine_years'] }}" min="0" required>
+      </label>
+      <label>Penalty per year over
+        <input type="number" name="scoring.experience.over_penalty_per_year" value="{{ v['scoring.experience.over_penalty_per_year'] }}" required>
+      </label>
+      <label>Sparse: min chars
+        <input type="number" name="scoring.sparse_description.min_chars" value="{{ v['scoring.sparse_description.min_chars'] }}" required>
+      </label>
+      <label>Sparse: multiplier
+        <input type="number" step="0.05" name="scoring.sparse_description.multiplier" value="{{ v['scoring.sparse_description.multiplier'] }}" required>
+      </label>
+    </div>
+  </section>
+
+  <button type="submit" class="save">Save &amp; re-score</button>
+</form>
+{% endblock %}
