@@ -105,7 +105,7 @@ of the same job gets a fresh basename from `apply_run start`.
 
 **Stage 5 verification here:** resume_build sets the explicit document
 defaults and prints deterministic checklist violations — fix any before
-delivering. Read the generated PDF to confirm one page and 85-92% fill.
+delivering. Read the generated PDF to confirm one page and 85-94% fill.
 The DOCX cannot be rendered on this machine (no Word/LibreOffice), so
 report that check as NOT run and tell the user to open the DOCX once
 before submitting. Report every check honestly (run / not run).
