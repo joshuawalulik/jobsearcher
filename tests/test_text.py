@@ -71,6 +71,18 @@ def test_matching_keywords_preserves_profile_order_and_dedupes_nothing():
         ("years of experience", None),  # no number
         ("Founded 12 years ago. Experience with React required", None),  # sentence boundary
         ("", None),
+        # Technology-scoped years ("experience with/using X") don't set
+        # the floor when a general phrase exists (a real posting's
+        # "3+ years of experience using AWS" hid its "5+ years" bar).
+        ("5+ years of experience developing applications in Typescript. "
+         "5+ years of experience with React and NodeJS. "
+         "3+ years of experience using AWS / cloud technologies", 5),
+        ("4+ years of professional experience. "
+         "2+ years of experience working with Kafka", 4),
+        ("6+ years of software experience and 2+ years of experience using Docker", 6),
+        ("5+ years of experience. 1.5+ years of experience with Kubernetes", 5),
+        # ...but when every phrase is technology-scoped, lowest still wins.
+        ("3+ years of experience using AWS and 5+ years of experience with React", 3),
         # Decimal bars read whole, never from their fractional digit
         # (a real posting's "1.5+" scored as 5+).
         ("You have a total of 1.5+ years of experience as a software engineer", 1.5),

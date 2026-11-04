@@ -48,6 +48,16 @@ _YEARS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# A years phrase whose "experience" is followed by "with", "using", or
+# "working with" is scoped to one technology ("3+ years of experience
+# using AWS"), not the role's overall floor. Anchored at the years
+# match's end, mirroring _YEARS_PATTERN's lookahead, so it classifies
+# the same "experience" occurrence that validated the match.
+_TECH_SCOPED_PATTERN = re.compile(
+    r"^(?:(?!experience)[^.]){0,60}?experience\s+(?:working\s+)?(?:with|using)\b",
+    re.IGNORECASE,
+)
+
 
 def required_experience_years(text: str) -> int | float | None:
     """The lowest years-of-experience bar in the text, or None if absent.
@@ -59,11 +69,25 @@ def required_experience_years(text: str) -> int | float | None:
     requirements by a few points; taking the maximum buried good jobs
     under tier language, which is the worse error.
 
+    Technology-scoped phrases ("3+ years of experience using AWS") are
+    excluded from the minimum when any general phrase exists: they bound
+    one skill, not the role, and letting them win hid the real floor
+    ("5+ years ... experience" postings scoring as 3-year roles). When
+    every phrase is technology-scoped, the lowest still wins — a posting
+    whose only stated bar is "5+ years of experience with React" means
+    five years.
+
     Whole-number bars come back as int so stored reasons read "5 years",
     not "5.0 years"; fractional bars ("1.5+ years") stay float.
     """
-    years = [float(m.group(1)) for m in _YEARS_PATTERN.finditer(text)]
+    years: list[float] = []
+    general: list[float] = []
+    for m in _YEARS_PATTERN.finditer(text):
+        value = float(m.group(1))
+        years.append(value)
+        if not _TECH_SCOPED_PATTERN.match(text[m.end():]):
+            general.append(value)
     if not years:
         return None
-    lowest = min(years)
+    lowest = min(general) if general else min(years)
     return int(lowest) if lowest.is_integer() else lowest
