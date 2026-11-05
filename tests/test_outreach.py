@@ -765,3 +765,115 @@ def test_restore_refuses_blocked_contacts():
 def test_restore_only_applies_to_skipped_contacts():
     with pytest.raises(ValueError, match="Only skipped"):
         outreach.restore_fields(contact(status="Sent"), CFG)
+
+
+# Contacts page
+
+
+def test_search_finds_names_emails_and_company_aliases():
+    rows = [
+        contact(id=1, name="Pat Doe", company="Acme Corp"),
+        contact(id=2, name="Sam Roe", company="Globex", email="sam@roe.example"),
+    ]
+    ids = lambda text: [c["id"] for c in outreach.filter_contacts(rows, CFG, search=text)]
+    assert ids("pat") == [1]
+    assert ids("roe.example") == [2]
+    assert ids("ACME Holdings") == [1]
+    assert ids("Globex Consulting Group") == [2]
+    assert ids("nobody") == []
+    assert ids("...") == []
+
+
+def test_default_view_hides_c_but_keeps_unranked_people():
+    rows = [
+        contact(id=1, priority="A"),
+        contact(id=2, priority="B"),
+        contact(id=3, priority="C"),
+        contact(id=4, priority=None, track="referral"),
+        contact(id=5, priority="skip", status="Skip"),
+    ]
+    assert {c["id"] for c in outreach.visible_contacts(rows, CFG)} == {1, 2, 4}
+    assert {c["id"] for c in outreach.visible_contacts(rows, CFG, show_c=True)} == {1, 2, 3, 4}
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [{"search": "Pat"}, {"priority": "C"}, {"status": "Not started"}],
+)
+def test_looking_for_someone_finds_c_contacts(filters):
+    rows = [contact(id=1, priority="C")]
+    assert len(outreach.visible_contacts(rows, CFG, **filters)) == 1
+
+
+def test_a_track_filter_alone_keeps_c_hidden():
+    rows = [contact(id=1, priority="C", track="agency")]
+    assert outreach.visible_contacts(rows, CFG, track="agency") == []
+
+
+def test_groups_put_real_relationships_first_and_skip_empty_tracks():
+    rows = [
+        contact(id=1, track="platform"),
+        contact(id=2, track="company_recruiter"),
+        contact(id=3, track="referral"),
+    ]
+    assert [track for track, _ in outreach.group_by_track(rows)] == [
+        "referral", "company_recruiter", "platform",
+    ]
+
+
+# Badges
+
+
+def test_badge_is_a_referral_path_for_a_real_connection():
+    rows = [contact(company="Acme", source="own_pipeline", priority=None)]
+    assert outreach.company_badges(rows, CFG) == {"acme corp": "Referral path"}
+
+
+def test_badge_is_contact_for_a_or_b():
+    rows = [contact(company="Acme", priority="B")]
+    assert outreach.company_badges(rows, CFG) == {"acme corp": "Contact"}
+
+
+def test_no_badge_for_c_skip_cold_or_no_company():
+    rows = [
+        contact(id=1, company="Acme", priority="C"),
+        contact(id=2, company="Globex", priority="A", status="Skip"),
+        contact(id=3, company="Hooli", source="own_pipeline", status="Cold"),
+        contact(id=4, company=None, source="own_pipeline"),
+    ]
+    assert outreach.company_badges(rows, CFG) == {}
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_a_real_connection_beats_a_contact_in_either_order(reverse):
+    rows = [
+        contact(id=1, company="Acme", priority="A"),
+        contact(id=2, company="Acme", source="own_pipeline"),
+    ]
+    rows = rows[::-1] if reverse else rows
+    assert outreach.company_badges(rows, CFG) == {"acme corp": "Referral path"}
+
+
+def test_a_contact_who_replies_upgrades_the_badge():
+    rows = [contact(company="Acme", priority="C", status="Replied",
+                    last_reply="2026-03-02")]
+    assert outreach.company_badges(rows, CFG) == {"acme corp": "Referral path"}
+
+
+def test_linked_badges_need_a_real_connection():
+    rows = [
+        contact(id=1, company="Staffing", source="own_pipeline"),
+        contact(id=2, company="Staffing", source="peer_list"),
+    ]
+    links = [
+        {"contact_id": 1, "application_id": 10},
+        {"contact_id": 2, "application_id": 20},
+    ]
+    assert outreach.linked_badges(rows, links) == {10: "Referral path"}
+
+
+def test_check_interaction():
+    outreach.check_interaction("email", "out", "Hello")
+    for args in (("fax", "out", "Hi"), ("email", "up", "Hi"), ("email", "out", " ")):
+        with pytest.raises(ValueError):
+            outreach.check_interaction(*args)

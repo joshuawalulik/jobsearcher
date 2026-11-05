@@ -346,12 +346,7 @@ def log_interaction(
     statuses to Replied. An outbound one moves the contact along the send
     sequence, and is refused for do-not-contact people.
     """
-    if not summary.strip():
-        raise ValueError("summary is empty")
-    if channel not in db.INTERACTION_CHANNELS:
-        raise ValueError(f"channel must be one of {list(db.INTERACTION_CHANNELS)}")
-    if direction not in db.INTERACTION_DIRECTIONS:
-        raise ValueError(f"direction must be one of {list(db.INTERACTION_DIRECTIONS)}")
+    outreach.check_interaction(channel, direction, summary)
     cfg = _outreach_cfg()
     on_date = outreach.iso_date(date or _today())
     conn = _connect()

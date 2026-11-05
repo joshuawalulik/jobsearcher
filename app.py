@@ -9,7 +9,7 @@ import json
 import re
 import sqlite3
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 import analytics
 import db
 import email_sync
+import outreach
 import profile_io
 from autosweep import sweep_and_rescore
 from scoring.rescore import rescore_all
@@ -66,12 +67,37 @@ def get_db():
         conn.close()
 
 
+def _outreach_cfg() -> dict:
+    return load_profile(PROFILE_PATH).get("outreach") or {}
+
+
+def _today() -> str:
+    return date.today().isoformat()
+
+
+def _attach_contact_badges(conn, rows: list[dict]) -> list[dict]:
+    """Label job dicts that have contacts, looking up each company only once."""
+    contacts = db.fetch_contacts(conn)
+    if not contacts:
+        return []
+    cfg = _outreach_cfg()
+    badges = outreach.company_badges(contacts, cfg)
+    by_company: dict[str, str | None] = {}
+    for row in rows:
+        name = row["company"]
+        if name not in by_company:
+            by_company[name] = badges.get(outreach.company_key(name, cfg))
+        row["contact_badge"] = by_company[name]
+    return contacts
+
+
 def _matches(conn, q: str | None = None) -> list[dict]:
     jobs = []
     for row in db.fetch_matches(conn, q):
         job = dict(row)
         job["breakdown"] = json.loads(job["score_breakdown"]) if job["score_breakdown"] else None
         jobs.append(job)
+    _attach_contact_badges(conn, jobs)
     return jobs
 
 
@@ -223,6 +249,10 @@ def _lanes(conn) -> list[dict]:
         by_lane[row["lane"]].append(app_row)
         all_apps.append(app_row)
     _attach_suggestions(conn, all_apps)
+    contacts = _attach_contact_badges(conn, all_apps)
+    linked = outreach.linked_badges(contacts, db.fetch_contact_links(conn))
+    for app_row in all_apps:
+        app_row["contact_badge"] = linked.get(app_row["id"]) or app_row.get("contact_badge")
     return [{"name": lane, "apps": apps} for lane, apps in by_lane.items()]
 
 
@@ -463,6 +493,231 @@ def dismiss_suggestion(sid: int, request: Request, conn=Depends(get_db)):
     db.set_suggestion_status(conn, sid, "dismissed")
     return templates.TemplateResponse(
         request, "_board.html", {"lanes": _lanes(conn), "all_lanes": db.LANES}
+    )
+
+
+# Edit-form fields, compared against the contact so only real changes are saved.
+_CONTACT_FORM_FIELDS = (
+    "status", "priority", "name", "company", "email", "linkedin_url",
+    "kind_detail", "ask", "next_step", "date_contacted", "last_reply",
+    "verify_flag",
+)
+_CONTACTS_CHANGED = {"HX-Trigger": "contactsChanged"}
+
+
+def _contact_view(row, cfg: dict) -> dict:
+    return {**dict(row), **outreach.contact_summary(row, _today(), cfg)}
+
+
+def _contacts_context(conn, cfg: dict, params: dict) -> dict:
+    """Everything the page body shows, for one set of filters."""
+    rows = db.fetch_contacts(conn)
+    today = _today()
+    skipped_tab = params.get("tab") == "skipped"
+    if skipped_tab:
+        shown = outreach.filter_contacts(
+            rows, cfg, status="Skip", track=params.get("track") or None,
+            search=params.get("q") or None,
+        )
+    else:
+        shown = outreach.visible_contacts(
+            rows, cfg,
+            track=params.get("track") or None,
+            status=params.get("status") or None,
+            priority=params.get("priority") or None,
+            search=params.get("q") or None,
+            show_c=bool(params.get("show_c")),
+        )
+    views = {c["id"]: _contact_view(c, cfg) for c in rows}
+    return {
+        "tab": "skipped" if skipped_tab else "active",
+        "params": params,
+        "groups": [
+            (track, [views[c["id"]] for c in group])
+            for track, group in outreach.group_by_track(shown)
+        ],
+        "shown_count": len(shown),
+        "active_count": sum(1 for c in rows if c["status"] != "Skip"),
+        "skipped_count": sum(1 for c in rows if c["status"] == "Skip"),
+        "due": [views[c["id"]] for c, _ in outreach.follow_ups_due(rows, today, cfg)],
+        "week": outreach.weekly_summary(rows, db.fetch_interactions(conn), today, cfg),
+    }
+
+
+@app.get("/contacts", response_class=HTMLResponse)
+def contacts_page(request: Request, conn=Depends(get_db)):
+    params = dict(request.query_params)
+    return templates.TemplateResponse(
+        request,
+        "contacts.html",
+        {
+            **_contacts_context(conn, _outreach_cfg(), params),
+            "statuses": db.CONTACT_STATUSES,
+            "priorities": db.CONTACT_PRIORITIES,
+            "tracks": outreach.TRACK_ORDER,
+            "today": _today(),
+        },
+    )
+
+
+@app.get("/contacts/body", response_class=HTMLResponse)
+def contacts_body(request: Request, conn=Depends(get_db)):
+    """HTMX partial: filters changed, or a contact was edited."""
+    params = dict(request.query_params)
+    return templates.TemplateResponse(
+        request, "_contacts_body.html", _contacts_context(conn, _outreach_cfg(), params)
+    )
+
+
+@app.get("/contacts/due-count", response_class=HTMLResponse)
+def contacts_due_count(conn=Depends(get_db)):
+    """Nav badge. Empty when nothing is due, so CSS can hide it."""
+    due = outreach.follow_ups_due(db.fetch_contacts(conn), _today(), _outreach_cfg())
+    return HTMLResponse(str(len(due)) if due else "")
+
+
+def _render_contact_modal(request, conn, contact_id, cfg, *, warnings=(), error=None,
+                          headers=None):
+    row = db.get_contact(conn, contact_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no contact with id {contact_id}")
+    return templates.TemplateResponse(
+        request,
+        "_contact_modal.html",
+        {
+            "c": _contact_view(row, cfg),
+            "interactions": db.fetch_interactions(conn, contact_id),
+            "template": outreach.suggest_template(row, cfg),
+            "double_up": outreach.double_up_warning(row["company"], cfg),
+            "warnings": warnings,
+            "error": error,
+            "statuses": db.CONTACT_STATUSES,
+            "priorities": db.CONTACT_PRIORITIES,
+            "channels": db.INTERACTION_CHANNELS,
+            "today": _today(),
+        },
+        headers=headers,
+    )
+
+
+@app.get("/contacts/{contact_id}/modal", response_class=HTMLResponse)
+def contact_modal(contact_id: int, request: Request, conn=Depends(get_db)):
+    return _render_contact_modal(request, conn, contact_id, _outreach_cfg())
+
+
+@app.post("/contacts/{contact_id}", response_class=HTMLResponse)
+async def contact_update(contact_id: int, request: Request, conn=Depends(get_db)):
+    """Save the modal's edit form. Refusals come back inline with the reason."""
+    cfg = _outreach_cfg()
+    row = db.get_contact(conn, contact_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no contact with id {contact_id}")
+    form = await request.form()
+    changes = {}
+    for field in _CONTACT_FORM_FIELDS:
+        if field in form:
+            value = form[field].strip() or None
+            if value != row[field]:
+                changes[field] = value
+    if form.get("notes", "").strip():
+        changes["notes"] = form["notes"]
+    try:
+        fields, warnings = outreach.plan_update(row, changes, _today(), cfg)
+        if "email" in fields:
+            others = [c for c in db.fetch_contacts(conn) if c["id"] != contact_id]
+            duplicate = outreach.find_duplicate(fields["email"], others)
+            if duplicate:
+                raise ValueError(f"Email already used by contact {duplicate['id']}")
+    except ValueError as exc:
+        return _render_contact_modal(request, conn, contact_id, cfg, error=str(exc))
+    db.update_contact(conn, contact_id, **fields)
+    return _render_contact_modal(
+        request, conn, contact_id, cfg, warnings=warnings, headers=_CONTACTS_CHANGED
+    )
+
+
+@app.post("/contacts/{contact_id}/interactions", response_class=HTMLResponse)
+def contact_log_interaction(
+    contact_id: int,
+    request: Request,
+    channel: str = Form(...),
+    direction: str = Form(...),
+    summary: str = Form(""),
+    on_date: str = Form(""),
+    conn=Depends(get_db),
+):
+    cfg = _outreach_cfg()
+    row = db.get_contact(conn, contact_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no contact with id {contact_id}")
+    try:
+        outreach.check_interaction(channel, direction, summary)
+        day = outreach.iso_date(on_date.strip() or _today())
+        # Worked out first, so a refused interaction leaves no log entry.
+        fields = outreach.apply_interaction(row, direction, day, cfg)
+    except ValueError as exc:
+        return _render_contact_modal(request, conn, contact_id, cfg, error=str(exc))
+    db.add_interaction(conn, contact_id, day, channel, direction, summary.strip())
+    db.update_contact(conn, contact_id, **fields)
+    return _render_contact_modal(request, conn, contact_id, cfg, headers=_CONTACTS_CHANGED)
+
+
+@app.post("/contacts/{contact_id}/restore")
+def contact_restore(contact_id: int, conn=Depends(get_db)) -> Response:
+    row = db.get_contact(conn, contact_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no contact with id {contact_id}")
+    try:
+        fields = outreach.restore_fields(row, _outreach_cfg())
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.update_contact(conn, contact_id, **fields)
+    return Response(status_code=200, headers=_CONTACTS_CHANGED)
+
+
+@app.post("/contacts", response_class=HTMLResponse)
+def contact_add(
+    request: Request,
+    track: str = Form(...),
+    source: str = Form("linkedin"),
+    name: str = Form(""),
+    company: str = Form(""),
+    email: str = Form(""),
+    linkedin_url: str = Form(""),
+    kind_detail: str = Form(""),
+    priority: str = Form(""),
+    next_step: str = Form(""),
+    notes: str = Form(""),
+    conn=Depends(get_db),
+):
+    cfg = _outreach_cfg()
+    existing = db.fetch_contacts(conn)
+    duplicate = outreach.find_duplicate(email, existing)
+    if duplicate:
+        return templates.TemplateResponse(
+            request,
+            "_contact_flash.html",
+            {"error": f"Already saved: {duplicate['name'] or duplicate['company']}."},
+        )
+    submitted = {
+        "track": track, "source": source, "name": name, "company": company,
+        "email": email, "linkedin_url": linkedin_url, "kind_detail": kind_detail,
+        "priority": priority, "next_step": next_step, "notes": notes,
+    }
+    try:
+        fields, warnings = outreach.plan_new_contact(
+            {k: v.strip() or None for k, v in submitted.items()}, existing, cfg
+        )
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            request, "_contact_flash.html", {"error": str(exc)}
+        )
+    db.insert_contact(conn, **fields)
+    return templates.TemplateResponse(
+        request,
+        "_contact_flash.html",
+        {"saved": name.strip() or company.strip(), "warnings": warnings},
+        headers=_CONTACTS_CHANGED,
     )
 
 

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% set active = 'contacts' %}
+{% block title %}Contacts — Job Search Tool{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Contacts</h1>
+</header>
+<details class="add-job">
+  <summary>Add a contact</summary>
+  <p class="hint">For someone you found yourself. Leave anything you don't know blank.
+  A firm with no person yet is fine.</p>
+  <form hx-post="/contacts" hx-target="#add-contact-result" hx-swap="innerHTML"
+        hx-on::after-request="if (event.detail.xhr.getResponseHeader('HX-Trigger')) this.reset()">
+    <div class="contact-form-grid">
+      <label>Name <input type="text" name="name"></label>
+      <label>Company <input type="text" name="company"></label>
+      <label>Email <input type="email" name="email"></label>
+      <label>LinkedIn URL <input type="url" name="linkedin_url"></label>
+      <label>Type
+        <select name="track" required>
+          {% for t in tracks %}<option value="{{ t }}" {% if t == 'agency' %}selected{% endif %}>{{ t | replace('_', ' ') | capitalize }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>How you know them
+        <select name="source">
+          <option value="linkedin">Found on LinkedIn</option>
+          <option value="own_pipeline">Someone I actually know</option>
+          <option value="research">Research</option>
+        </select>
+      </label>
+      <label>Priority
+        <select name="priority">
+          <option value="">None</option>
+          {% for p in priorities if p != 'skip' %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>What they do <input type="text" name="kind_detail"></label>
+      <label>Next step <input type="text" name="next_step"></label>
+      <label>Notes <input type="text" name="notes"></label>
+    </div>
+    <button class="save" type="submit">Add contact</button>
+  </form>
+  <div id="add-contact-result"></div>
+</details>
+<form id="contact-filters" class="contact-filters" hx-get="/contacts/body"
+      hx-target="#contacts-body" hx-swap="innerHTML"
+      hx-trigger="change, input changed delay:250ms from:#contact-search, submit">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <input id="contact-search" class="search" type="search" name="q" value="{{ params.q or '' }}"
+         placeholder="Search name, company or email&hellip;" aria-label="Search contacts">
+  <select name="track" aria-label="Type">
+    <option value="">All types</option>
+    {% for t in tracks %}<option value="{{ t }}" {% if params.track == t %}selected{% endif %}>{{ t | replace('_', ' ') | capitalize }}</option>{% endfor %}
+  </select>
+  {% if tab == 'active' %}
+  <select name="status" aria-label="Status">
+    <option value="">All statuses</option>
+    {% for s in statuses if s != 'Skip' %}<option value="{{ s }}" {% if params.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="priority" aria-label="Priority">
+    <option value="">All priorities</option>
+    {% for p in priorities if p != 'skip' %}<option value="{{ p }}" {% if params.priority == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+  </select>
+  <label class="check show-c"><input type="checkbox" name="show_c" value="1" {% if params.show_c %}checked{% endif %}> Show priority C</label>
+  {% endif %}
+</form>
+<div id="contacts-body" hx-get="/contacts/body" hx-include="#contact-filters"
+     hx-trigger="contactsChanged from:body" hx-swap="innerHTML" hx-disinherit="*">
+  {% include "_contacts_body.html" %}
+</div>
+<div id="modal"></div>
+<script>
+  // Row clicks open the detail modal, except on the row's own controls.
+  function opensContactModal(evt) {
+    return !evt.target.closest("a, button");
+  }
+  document.addEventListener("keydown", function (evt) {
+    if (evt.key === "Escape") {
+      var overlay = document.querySelector(".modal-overlay");
+      if (overlay) overlay.remove();
+    }
+  });
+</script>
+{% endblock %}

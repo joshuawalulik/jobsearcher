@@ -6,6 +6,7 @@
     {{ a.company }}
     {% if a.score is not none %} · score {{ '%g' % a.score }}{% endif %}
     {% if a.applied_at %} · applied {{ a.applied_at[:10] }}{% endif %}
+    {% if a.contact_badge %}<a class="contact-badge{% if a.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ a.company | urlencode }}">{{ a.contact_badge }}</a>{% endif %}
   </p>
   {% if a.next_action %}
   <p class="next-action">&rarr; {{ a.next_action }}{% if a.next_action_due %} <span class="due">due {{ a.next_action_due }}</span>{% endif %}</p>
