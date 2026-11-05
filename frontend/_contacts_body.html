@@ -56,7 +56,7 @@
 {% endif %}
 {% for track, rows in groups %}
 <section class="panel">
-  <h2>{{ {'referral': 'Referrals', 'agency': 'Agencies', 'company_recruiter': 'Company recruiters', 'platform': 'Platforms'}[track] }} ({{ rows | length }})</h2>
+  <h2>{{ {'referral': 'Referrals', 'mentor': 'Mentors / informational', 'agency': 'Agencies', 'company_recruiter': 'Company recruiters', 'platform': 'Platforms'}[track] }} ({{ rows | length }})</h2>
   <table>
     <thead>
       {% if tab == 'skipped' %}

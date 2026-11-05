@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS contacts (
     email           TEXT,
     linkedin_url    TEXT,
     track           TEXT NOT NULL CHECK (track IN
-                    ('agency', 'company_recruiter', 'referral', 'platform')),
+                    ('agency', 'company_recruiter', 'referral', 'mentor',
+                     'platform')),
     kind_detail     TEXT,
     priority        TEXT CHECK (priority IS NULL OR priority IN
                     ('A', 'B', 'C', 'skip')),
@@ -135,12 +136,12 @@ CREATE TABLE IF NOT EXISTS contacts (
     peer_history    TEXT,
     verify_flag     TEXT,
     gmail_draft_id  TEXT,
+    -- Set when a contact is taken out of the tool. The row stays so the
+    -- removal can be undone and a re-import won't bring them back.
+    removed_at      TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS contacts_email_unique
-    ON contacts (lower(email)) WHERE email IS NOT NULL;
 
 -- Append-only outreach log.
 CREATE TABLE IF NOT EXISTS interactions (
@@ -184,7 +185,7 @@ LANES = (
 
 
 # Outreach enums. Must match the contacts CHECK constraints above.
-CONTACT_TRACKS = ("agency", "company_recruiter", "referral", "platform")
+CONTACT_TRACKS = ("agency", "company_recruiter", "referral", "mentor", "platform")
 CONTACT_PRIORITIES = ("A", "B", "C", "skip")
 CONTACT_STATUSES = (
     "Not started",
@@ -241,6 +242,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrate_companies_check(conn)
     _migrate_applications_check(conn)
     _migrate_email_suggestions_check(conn)
+    _migrate_contacts_check(conn)
 
 
 def _migrate_companies_check(conn: sqlite3.Connection) -> None:
@@ -375,6 +377,76 @@ def _migrate_email_suggestions_check(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE email_suggestions_new RENAME TO email_suggestions")
     conn.commit()
     conn.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_contacts_check(conn: sqlite3.Connection) -> None:
+    """Rebuild contacts if it predates the 'mentor' track and removed_at.
+
+    Same copy-drop-rename dance as the other migrations; contact ids are
+    preserved so interactions and contact_applications stay attached. The
+    email index lives here, not in SCHEMA, because on an older table it would
+    name a column that doesn't exist yet.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'contacts'"
+    ).fetchone()
+    if "'mentor'" not in row["sql"]:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute(
+            """
+            CREATE TABLE contacts_new (
+                id              INTEGER PRIMARY KEY,
+                name            TEXT,
+                company         TEXT,
+                email           TEXT,
+                linkedin_url    TEXT,
+                track           TEXT NOT NULL CHECK (track IN
+                                ('agency', 'company_recruiter', 'referral',
+                                 'mentor', 'platform')),
+                kind_detail     TEXT,
+                priority        TEXT CHECK (priority IS NULL OR priority IN
+                                ('A', 'B', 'C', 'skip')),
+                nyc_relevance   TEXT,
+                ask             TEXT,
+                status          TEXT NOT NULL DEFAULT 'Not started' CHECK (status IN
+                                ('Not started', 'Drafted', 'Sent', 'Follow-up 1 sent',
+                                 'Follow-up 2 sent', 'Replied', 'Call scheduled',
+                                 'Referred / submitted', 'Cold', 'Skip')),
+                date_contacted  TEXT,
+                last_reply      TEXT,
+                next_step       TEXT,
+                notes           TEXT,
+                source          TEXT NOT NULL CHECK (source IN
+                                ('own_pipeline', 'peer_list', 'research', 'linkedin')),
+                peer_history    TEXT,
+                verify_flag     TEXT,
+                gmail_draft_id  TEXT,
+                removed_at      TEXT,
+                created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """INSERT INTO contacts_new
+               SELECT id, name, company, email, linkedin_url, track, kind_detail,
+                      priority, nyc_relevance, ask, status, date_contacted,
+                      last_reply, next_step, notes, source, peer_history,
+                      verify_flag, gmail_draft_id, NULL, created_at, updated_at
+               FROM contacts"""
+        )
+        conn.execute("DROP TABLE contacts")
+        conn.execute("ALTER TABLE contacts_new RENAME TO contacts")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS contacts_email_unique
+            ON contacts (lower(email))
+            WHERE email IS NOT NULL AND removed_at IS NULL
+        """
+    )
+    conn.commit()
 
 
 def _like_pattern(query: str) -> str:
@@ -861,12 +933,29 @@ def insert_contact(conn: sqlite3.Connection, **fields) -> int:
 
 def get_contact(conn: sqlite3.Connection, contact_id: int) -> sqlite3.Row | None:
     return conn.execute(
-        "SELECT * FROM contacts WHERE id = ?", (contact_id,)
+        "SELECT * FROM contacts WHERE id = ? AND removed_at IS NULL", (contact_id,)
     ).fetchone()
 
 
-def fetch_contacts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM contacts ORDER BY id").fetchall()
+def fetch_contacts(
+    conn: sqlite3.Connection, include_removed: bool = False
+) -> list[sqlite3.Row]:
+    """Every contact in the tool. include_removed is for the importer, which
+    must recognize removed people so it doesn't add them back."""
+    where = "" if include_removed else "WHERE removed_at IS NULL"
+    return conn.execute(f"SELECT * FROM contacts {where} ORDER BY id").fetchall()
+
+
+def remove_contact(conn: sqlite3.Connection, contact_id: int) -> bool:
+    """Take a contact out of every list, count and tool. Reversible by
+    clearing removed_at. Returns False if no such contact."""
+    cur = conn.execute(
+        "UPDATE contacts SET removed_at = datetime('now') "
+        "WHERE id = ? AND removed_at IS NULL",
+        (contact_id,),
+    )
+    conn.commit()
+    return cur.rowcount > 0
 
 
 def update_contact(conn: sqlite3.Connection, contact_id: int, **fields) -> bool:

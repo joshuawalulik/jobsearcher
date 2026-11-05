@@ -143,6 +143,20 @@ def test_week_panel_shows_rate_and_targets(client, conn):
     assert "target 5 to 8" in html
 
 
+def test_mentors_get_their_own_section_after_referrals(client, conn):
+    contact(conn, name="Wise Mentor", track="mentor", source="own_pipeline", priority=None)
+    contact(conn, name="Real Friend", track="referral", source="own_pipeline", priority=None)
+    html = client.get("/contacts").text
+    assert html.index("Referrals (1)") < html.index("Mentors / informational (1)")
+
+
+def test_removed_contact_is_gone_from_the_page_and_modal(client, conn):
+    contact_id = contact(conn, name="Gone Person")
+    db.remove_contact(conn, contact_id)
+    assert "Gone Person" not in client.get("/contacts?show_c=1").text
+    assert client.get(f"/contacts/{contact_id}/modal").status_code == 404
+
+
 # Skipped
 
 
@@ -428,6 +442,12 @@ def test_feed_shows_no_badge_for_c_or_skip(client, conn):
     job(conn)
     contact(conn, priority="C")
     contact(conn, name="Sam Roe", priority="A", status="Skip")
+    assert "contact-badge" not in client.get("/").text
+
+
+def test_feed_shows_no_badge_for_a_mentor(client, conn):
+    job(conn)
+    contact(conn, track="mentor", source="own_pipeline", priority=None)
     assert "contact-badge" not in client.get("/").text
 
 
