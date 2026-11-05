@@ -35,7 +35,7 @@ _EDITABLE = (
 )
 _DATE_FIELDS = ("date_contacted", "last_reply")
 _PRIORITY_ORDER = {"A": 0, "B": 1, "C": 2, None: 3, "skip": 4}
-TRACK_ORDER = ("referral", "agency", "company_recruiter", "platform")
+TRACK_ORDER = ("referral", "mentor", "agency", "company_recruiter", "platform")
 BADGE_PATH = "Referral path"
 BADGE_CONTACT = "Contact"
 
@@ -99,8 +99,9 @@ def follow_up_due(contact: Mapping, cfg: Mapping) -> date | None:
     """When the next follow-up is due, or None if none is.
 
     Both follow-ups count from the first message, not the previous follow-up.
+    Mentors have no clock: bumping a thread is for cold outreach.
     """
-    if not contact["date_contacted"]:
+    if not contact["date_contacted"] or contact["track"] == "mentor":
         return None
     rules = cfg["follow_up"]
     days = {
@@ -239,19 +240,24 @@ def check_interaction(channel: str, direction: str, summary: str) -> None:
 def has_referral_path(contact: Mapping) -> bool:
     """True for a real connection: your own pipeline, or someone who replied.
 
-    A name on a reference list is not a path, however promising it looks.
+    A name on a reference list is not a path, however promising it looks. A
+    mentor isn't one either: they're there for advice, not a way in.
     """
-    if contact["status"] in _INACTIVE:
+    if contact["status"] in _INACTIVE or contact["track"] == "mentor":
         return False
     return contact["source"] == "own_pipeline" or bool(contact["last_reply"])
 
 
 def reply_rate(contacts: list[Mapping]) -> float:
-    """Replied or further, out of everyone contacted. 0.0 if nobody yet."""
-    contacted = sum(1 for c in contacts if c["status"] in _CONTACTED)
+    """Replied or further, out of everyone contacted. 0.0 if nobody yet.
+
+    Measures outreach, so mentors don't count either way.
+    """
+    outreach_rows = [c for c in contacts if c["track"] != "mentor"]
+    contacted = sum(1 for c in outreach_rows if c["status"] in _CONTACTED)
     if not contacted:
         return 0.0
-    return sum(1 for c in contacts if c["status"] in _REPLIED) / contacted
+    return sum(1 for c in outreach_rows if c["status"] in _REPLIED) / contacted
 
 
 def _week_bounds(week_of: str | date) -> tuple[date, date]:
@@ -485,14 +491,15 @@ def suggest_template(contact: Mapping, cfg: Mapping) -> dict | None:
     """The message template that fits this contact, filled in, or None.
 
     None for anyone who needs a personal message or no message at all: firm-only
-    rows, blocked or inactive contacts, people already in a conversation, and
-    referral relationships, apart from an alumni first touch.
+    rows, blocked or inactive contacts, people already in a conversation,
+    mentors, and referral relationships, apart from an alumni first touch.
     Any {new_detail} placeholder is left for the writer to fill.
     """
     status = contact["status"]
     if (
         not contact["name"]
         or status in _INACTIVE
+        or contact["track"] == "mentor"
         or block_reason(contact["company"], contact["email"], cfg)
     ):
         return None

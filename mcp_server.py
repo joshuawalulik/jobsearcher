@@ -51,7 +51,9 @@ mcp = MCPServer(
         "handles experienced engineering hiring), never a job request. "
         "Agencies get asked whether they are working relevant searches. "
         "Referrals need rapport first, so a first touch is never a referral "
-        "ask. Show any warnings a tool returns to the user. If do_not_contact "
+        "ask. Mentors are there for advice and information only: never ask "
+        "them for a job, a referral or an intro unless the user says to. "
+        "Show any warnings a tool returns to the user. If do_not_contact "
         "is set, never draft to or suggest that person."
     ),
 )
@@ -193,7 +195,7 @@ def list_contacts(
 ) -> list[dict]:
     """Recruiter and referral contacts, best priority first.
 
-    Filters: track (agency, company_recruiter, referral, platform), status,
+    Filters: track (agency, company_recruiter, referral, mentor, platform), status,
     priority (A, B, C, skip), and company (any part of the name). Skipped
     contacts are hidden unless status="Skip". Use get_contact(contact_id) for
     peer history, the interaction log and a message template.
@@ -250,7 +252,7 @@ def add_contact(
     notes: str | None = None,
     source: str | None = None,
 ) -> dict:
-    """Add a contact. track is agency, company_recruiter, referral or platform.
+    """Add a contact. track is agency, company_recruiter, referral, mentor or platform.
 
     Needs a name or a company, so a firm with no person yet is fine. Never
     invent a name or an email: leave unknown fields out. If the email is

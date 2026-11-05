@@ -877,3 +877,59 @@ def test_check_interaction():
     for args in (("fax", "out", "Hi"), ("email", "up", "Hi"), ("email", "out", " ")):
         with pytest.raises(ValueError):
             outreach.check_interaction(*args)
+
+
+# Mentors
+
+
+def mentor(**overrides):
+    return contact(track="mentor", source="own_pipeline", **overrides)
+
+
+def test_mentor_has_no_follow_up_clock():
+    row = mentor(status="Sent", date_contacted="2026-03-02")
+    assert outreach.follow_up_due(row, CFG) is None
+    assert outreach.attention_reason(row, "2026-06-01", CFG) is None
+
+
+def test_a_mentor_reply_still_gets_flagged():
+    row = mentor(status="Replied", last_reply="2026-03-02")
+    assert "24 hours" in outreach.attention_reason(row, "2026-03-03", CFG)
+
+
+def test_mentor_is_not_a_referral_path_or_a_badge():
+    row = mentor(company="Acme", priority=None, status="Replied", last_reply="2026-03-02")
+    assert outreach.has_referral_path(row) is False
+    assert outreach.company_badges([row], CFG) == {}
+
+
+def test_mentor_gets_no_template():
+    assert outreach.suggest_template(mentor(), CFG) is None
+    assert outreach.suggest_template(mentor(kind_detail="Fellow alum"), CFG) is None
+
+
+def test_mentors_stay_out_of_reply_rate():
+    rows = [
+        contact(id=1, status="Replied"),
+        contact(id=2, status="Sent"),
+        mentor(id=3, status="Sent"),
+        mentor(id=4, status="Sent"),
+    ]
+    assert outreach.reply_rate(rows) == 0.5
+
+
+def test_mentor_touches_are_not_referral_touches():
+    rows = [mentor(id=1)]
+    interactions = [{"contact_id": 1, "date": "2026-03-04", "direction": "out"}]
+    summary = outreach.weekly_summary(rows, interactions, "2026-03-04", CFG)
+    assert summary["progress"]["referral_touches"]["done"] == 0
+
+
+def test_mentors_group_after_referrals():
+    rows = [contact(id=1, track="agency"), mentor(id=2), contact(id=3, track="referral")]
+    assert [t for t, _ in outreach.group_by_track(rows)] == ["referral", "mentor", "agency"]
+
+
+def test_mentor_can_be_added():
+    new, _ = outreach.plan_new_contact({"name": "Pat Doe", "track": "mentor"}, [], CFG)
+    assert new["track"] == "mentor"
