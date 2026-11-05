@@ -63,21 +63,37 @@ templates = Jinja2Templates(directory=FRONTEND_DIR)
 # Saved message history, git-ignored with the rest of data/.
 CONVERSATIONS_DIR = db.DB_PATH.parent / "conversations"
 _CONVERSATION_PATH = re.compile(r"data/conversations/([\w./-]+?\.md)")
+# Runs on escaped text, so stop at an entity like &#39;. A bare domain needs a
+# path, which keeps words such as Node.js out.
+_MESSAGE_LINK = re.compile(
+    r"(?P<url>(?:https?://|\b[\w-]+\.(?:com|io|ai|org|net)/)(?:(?!&#)[^\s<])*)"
+    r"|(?P<email>[\w.+-]+@[\w-]+(?:\.[\w-]+)+)"
+)
 
 
 def link_conversations(text: str) -> Markup:
     """Notes, escaped, with saved conversation paths turned into links."""
     return Markup(
         _CONVERSATION_PATH.sub(
-            lambda m: f'<a href="/conversations/{m[1]}" target="_blank" rel="noopener">{m[0]}</a>',
+            lambda m: f'<a href="/conversations/{m[1]}">{m[0]}</a>',
             str(escape(text)),
         )
     )
 
 
+def _message_link(match: re.Match) -> str:
+    """One URL or email as a link, leaving sentence punctuation outside it."""
+    if match["email"]:
+        return f'<a href="mailto:{match["email"]}">{match["email"]}</a>'
+    url = match["url"].rstrip(".,;:!?)]")
+    href = url if "://" in url else f"https://{url}"
+    tail = match["url"][len(url):]
+    return f'<a href="{href}" target="_blank" rel="noopener">{url}</a>{tail}'
+
+
 def render_conversation(text: str) -> Markup:
-    """A saved conversation, escaped, with its headings and speakers styled."""
-    html = str(escape(text))
+    """A saved conversation, escaped, with links, headings and speakers styled."""
+    html = _MESSAGE_LINK.sub(_message_link, str(escape(text)))
     html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.M)
     html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.M)
     html = re.sub(r"^\*\*(.+?)\*\*", r"<strong>\1</strong>", html, flags=re.M)

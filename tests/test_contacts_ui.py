@@ -149,7 +149,7 @@ def conversations(tmp_path, monkeypatch):
 def test_a_conversation_path_in_notes_is_a_link(client, conn):
     contact_id = contact(conn, notes="See data/conversations/leads/pat-doe.md for <more>")
     html = client.get(f"/contacts/{contact_id}/modal").text
-    assert '<a href="/conversations/leads/pat-doe.md" target="_blank"' in html
+    assert '<a href="/conversations/leads/pat-doe.md">' in html
     assert "&lt;more&gt;" in html
 
 
@@ -161,6 +161,22 @@ def test_conversation_page_shows_the_saved_text(client, conversations):
     assert "<h2>2026-03-02</h2>" in html
     assert "<strong>Pat Doe, 9:00 AM</strong>" in html
     assert "&lt;b&gt;hello&lt;/b&gt;" in html
+
+
+def test_links_in_a_conversation_work(client, conversations):
+    (conversations / "pat-doe.md").write_text(
+        "See https://example.com/job?a=1&b=2. Book calendly.com/pat-doe or "
+        "(https://example.com/x), mail pat@example.com. Uses Node.js.\n",
+        encoding="utf-8",
+    )
+    html = client.get("/conversations/pat-doe.md").text
+    assert '<a href="https://example.com/job?a=1&amp;b=2" target="_blank" rel="noopener">' in html
+    assert 'b=2</a>. Book' in html
+    assert '<a href="https://calendly.com/pat-doe" target="_blank"' in html
+    assert 'example.com/x</a>)' in html
+    assert '<a href="mailto:pat@example.com">pat@example.com</a>' in html
+    assert ">Node.js" not in html
+    assert 'href="/contacts"' in html
 
 
 @pytest.mark.parametrize("name", ["missing.md", "secret.txt", "%2e%2e/outside.md"])
