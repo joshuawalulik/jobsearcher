@@ -7,16 +7,28 @@
 {% if tab == 'active' %}
 <section class="panel">
   <h2>Due today</h2>
-  {% if due %}
+  {% if due or watch %}
   <table>
-    <thead><tr><th>Name</th><th>Company</th><th>What's needed</th></tr></thead>
+    <thead><tr><th>Name</th><th>Company</th><th>What's needed</th><th></th></tr></thead>
     <tbody>
+      {% for m in watch %}
+      <tr>
+        <td>{{ m.contact_name }}</td>
+        <td>{{ m.company }}</td>
+        <td class="contact-due">Send this role:
+          {% if m.url %}<a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }} &nearr;</a>{% else %}{{ m.title }}{% endif %}
+          <span class="watch-reason">{{ m.location or '' }}{% if m.location %} · {% endif %}{{ m.reason }}</span>
+        </td>
+        <td class="num"><button class="restore" hx-post="/jobs/{{ m.job_id }}/dismiss" hx-swap="none">Dismiss</button></td>
+      </tr>
+      {% endfor %}
       {% for c in due %}
       <tr class="contact-row" hx-get="/contacts/{{ c.contact_id }}/modal" hx-target="#modal"
           hx-swap="innerHTML" hx-trigger="click[opensContactModal(event)]">
         <td>{{ c.name or c.company }}</td>
         <td>{{ c.company or '—' }}</td>
         <td class="contact-due">{{ c.needs_action }}</td>
+        <td></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -70,7 +82,7 @@
       <tr class="contact-row" hx-get="/contacts/{{ c.contact_id }}/modal" hx-target="#modal"
           hx-swap="innerHTML" hx-trigger="click[opensContactModal(event)]">
         <td>{{ c.name or '—' }}
-          {% if c.referral_path %}<span class="contact-badge path">Referral path</span>{% endif %}
+          {% if c.referral_path %}<span class="contact-badge path">{{ 'Standing referral' if c.standing_referral else 'Referral path' }}</span>{% endif %}
           {% if c.verify_flag %}<span class="verify-flag" title="{{ c.verify_flag }}">Verify</span>{% endif %}
         </td>
         <td>{{ c.company or '—' }}</td>

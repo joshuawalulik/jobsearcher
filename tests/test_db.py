@@ -273,6 +273,20 @@ def test_contacts_migration_allows_the_new_track_and_keeps_rules(old_contacts_db
         _contact(conn, email="PAT@example.com")
 
 
+def test_contacts_migration_adds_the_standing_referral_flag(old_contacts_db):
+    db.init_db(old_contacts_db)
+    assert db.get_contact(old_contacts_db, 7)["standing_referral"] == 0
+
+
+def test_flag_is_added_to_a_table_that_already_has_the_mentor_track(conn):
+    conn.execute("ALTER TABLE contacts DROP COLUMN standing_referral")
+    contact_id = _contact(conn)
+    db.init_db(conn)
+    assert db.get_contact(conn, contact_id)["standing_referral"] == 0
+    db.update_contact(conn, contact_id, standing_referral=1)
+    assert db.get_contact(conn, contact_id)["standing_referral"] == 1
+
+
 def test_contacts_migration_runs_once(old_contacts_db):
     conn = old_contacts_db
     db.init_db(conn)

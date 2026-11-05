@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from typing import Mapping
 
 import db
+from scoring.score import detect_seniority
+from scoring.text import contains_keyword
 
 # The order a contact moves through before anyone replies.
 _PRE_REPLY = ("Not started", "Drafted", "Sent", "Follow-up 1 sent", "Follow-up 2 sent")
@@ -31,7 +33,7 @@ _INACTIVE = ("Skip", "Cold")
 _EDITABLE = (
     "name", "company", "email", "linkedin_url", "kind_detail", "priority",
     "nyc_relevance", "ask", "status", "date_contacted", "last_reply",
-    "next_step", "notes", "verify_flag", "gmail_draft_id",
+    "next_step", "notes", "verify_flag", "gmail_draft_id", "standing_referral",
 )
 _DATE_FIELDS = ("date_contacted", "last_reply")
 _PRIORITY_ORDER = {"A": 0, "B": 1, "C": 2, None: 3, "skip": 4}
@@ -248,6 +250,34 @@ def has_referral_path(contact: Mapping) -> bool:
     return contact["source"] == "own_pipeline" or bool(contact["last_reply"])
 
 
+def is_watching(contact: Mapping, cfg: Mapping) -> bool:
+    """Whether this contact's company should be watched for roles.
+
+    A standing referral has to be a real, active connection, so the flag alone
+    never starts a watch on a Skip, Cold or do-not-contact person.
+    """
+    return (
+        bool(contact["standing_referral"])
+        and bool(contact["company"])
+        and has_referral_path(contact)
+        and not block_reason(contact["company"], contact["email"], cfg)
+    )
+
+
+def watch_reason(job: Mapping, cfg: Mapping, years_cfg: Mapping | None) -> str | None:
+    """Why a job suits a standing referral, or None if it doesn't.
+
+    Uses the scorer's own level check, so the watcher and the feed always agree
+    on what mid-level means. Which levels and titles count is in profile.yaml.
+    """
+    watch = cfg.get("referral_watch") or {}
+    title = job["title"] or ""
+    if not any(contains_keyword(title, k) for k in watch.get("title_keywords") or []):
+        return None
+    level, reason = detect_seniority(title, job["description"], years_cfg)
+    return f"{level} level: {reason}" if level in (watch.get("levels") or []) else None
+
+
 def reply_rate(contacts: list[Mapping]) -> float:
     """Replied or further, out of everyone contacted. 0.0 if nobody yet.
 
@@ -344,6 +374,7 @@ def contact_summary(contact: Mapping, as_of: str | date, cfg: Mapping) -> dict:
         "do_not_contact": block_reason(contact["company"], contact["email"], cfg),
         "verify_flag": contact["verify_flag"],
         "has_gmail_draft": bool(contact["gmail_draft_id"]),
+        "standing_referral": bool(contact["standing_referral"]),
     }
 
 
@@ -536,6 +567,8 @@ def _clean_value(field: str, value):
         value = value.strip() or None
     if value is not None and field in _DATE_FIELDS:
         value = _to_date(value).isoformat()
+    if field == "standing_referral":
+        return 1 if value in (True, 1, "1", "true") else 0
     if value is not None and field == "priority" and value not in db.CONTACT_PRIORITIES:
         raise ValueError(f"unknown priority: {value}")
     return value

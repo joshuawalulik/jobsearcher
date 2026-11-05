@@ -11,7 +11,7 @@
     </p>
     <p class="modal-status">
       <span class="tracked">{{ c.status }}</span>
-      {% if c.referral_path %}<span class="contact-badge path">Referral path</span>{% endif %}
+      {% if c.referral_path %}<span class="contact-badge path">{{ 'Standing referral' if c.standing_referral else 'Referral path' }}</span>{% endif %}
       {% if c.follow_up_due %} · follow-up due {{ c.follow_up_due }}{% endif %}
     </p>
     {% if error %}<p class="status error">{{ error }}</p>{% endif %}
@@ -114,6 +114,8 @@
           <label>Last reply <input type="date" name="last_reply" value="{{ c.last_reply or '' }}"></label>
           <label>Verify before sending <input type="text" name="verify_flag" value="{{ c.verify_flag or '' }}"></label>
         </div>
+        <input type="hidden" name="standing_referral" value="0">
+        <label class="check"><input type="checkbox" name="standing_referral" value="1" {% if c.standing_referral %}checked{% endif %}> Standing referral: watch their company for roles</label>
         <label>Add a note <textarea name="notes" rows="2"></textarea></label>
         <p class="hint">Marking someone Sent starts their follow-up clock, so do it once the message has really gone out.</p>
         <button class="save" type="submit">Save</button>

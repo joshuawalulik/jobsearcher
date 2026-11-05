@@ -21,6 +21,7 @@ CFG = {
     "dont_double_up": [{"company": "Initrode", "covered_by": "Pat Doe"}],
     "do_not_contact": [{"company": "Umbrella", "email_domains": ["umbrella.example"],
                         "reason": "former employer"}],
+    "referral_watch": {"levels": ["mid"], "title_keywords": ["software"]},
     "templates": {
         "company_recruiter": {"subject": "Hello", "body": "Hi {first}, about {company}."},
         "agency": {"subject": "Searches", "body": "Hi {first}."},
@@ -46,6 +47,7 @@ def conn(tmp_path, monkeypatch):
     app.dependency_overrides[get_db] = override
     monkeypatch.setattr(app_module, "_outreach_cfg", lambda: CFG)
     monkeypatch.setattr(app_module, "_today", lambda: "2026-03-02")
+    monkeypatch.setattr(app_module, "_years_cfg", lambda: {"junior_max": 1, "senior_min": 5})
     yield connection
     app.dependency_overrides.clear()
     connection.close()
@@ -413,6 +415,58 @@ def test_add_warns_on_double_up(client, conn):
     response = client.post("/contacts", data={"track": "agency", "name": "Sam",
                                               "company": "Initrode"})
     assert "already covered by Pat Doe" in response.text
+
+
+# Standing referrals
+
+
+def watched(conn):
+    job_id = job(conn)
+    conn.execute(
+        "UPDATE jobs SET title = 'Software Engineer', url = 'https://example.com/j', "
+        "location = 'New York', description = '3+ years of experience' WHERE id = ?",
+        (job_id,),
+    )
+    conn.commit()
+    return job_id, contact(conn, name="Sam Standing", track="referral",
+                           source="own_pipeline", priority=None, standing_referral=1)
+
+
+def test_matching_role_shows_in_due_today_and_the_nav_count(client, conn):
+    watched(conn)
+    html = client.get("/contacts").text
+    assert "Send this role:" in html
+    assert 'href="https://example.com/j"' in html
+    assert "mid level: description asks for 3+ years of experience" in html
+    assert client.get("/contacts/due-count").text == "1"
+
+
+def test_nav_count_adds_watch_matches_to_follow_ups(client, conn):
+    watched(conn)
+    contact(conn, name="Overdue Person", status="Sent", date_contacted="2026-02-02")
+    assert client.get("/contacts/due-count").text == "2"
+
+
+def test_dismissing_a_match_clears_it_and_refreshes(client, conn):
+    job_id, _ = watched(conn)
+    response = client.post(f"/jobs/{job_id}/dismiss")
+    assert response.headers["HX-Trigger"] == "contactsChanged"
+    assert "Send this role:" not in client.get("/contacts").text
+    assert client.get("/contacts/due-count").text == ""
+
+
+def test_standing_referral_shows_on_the_row(client, conn):
+    watched(conn)
+    assert "Standing referral" in client.get("/contacts").text
+
+
+def test_modal_checkbox_turns_the_watch_on_and_off(client, conn):
+    contact_id = contact(conn, track="referral", source="own_pipeline")
+    client.post(f"/contacts/{contact_id}", data={"standing_referral": ["0", "1"]})
+    assert db.get_contact(conn, contact_id)["standing_referral"] == 1
+    assert "checked" in client.get(f"/contacts/{contact_id}/modal").text
+    client.post(f"/contacts/{contact_id}", data={"standing_referral": ["0"]})
+    assert db.get_contact(conn, contact_id)["standing_referral"] == 0
 
 
 # Badges

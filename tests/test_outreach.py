@@ -4,7 +4,10 @@ import pytest
 
 import outreach
 
+YEARS = {"junior_max": 1, "senior_min": 5}
+
 CFG = {
+    "referral_watch": {"levels": ["mid"], "title_keywords": ["software", "full stack"]},
     "default_ask": "Who handles engineering hiring?",
     "templates": {
         "company_recruiter": {"subject": "Hello", "body": "Hi {first}, about {company}."},
@@ -56,6 +59,7 @@ def contact(**overrides):
         "notes": None,
         "verify_flag": None,
         "gmail_draft_id": None,
+        "standing_referral": 0,
         **overrides,
     }
 
@@ -933,3 +937,92 @@ def test_mentors_group_after_referrals():
 def test_mentor_can_be_added():
     new, _ = outreach.plan_new_contact({"name": "Pat Doe", "track": "mentor"}, [], CFG)
     assert new["track"] == "mentor"
+
+
+# Standing referrals
+
+
+def standing(**overrides):
+    fields = {"source": "own_pipeline", "track": "referral", "standing_referral": 1,
+              **overrides}
+    return contact(**fields)
+
+
+def test_watching_a_standing_referral():
+    assert outreach.is_watching(standing(), CFG) is True
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"standing_referral": 0},
+        {"company": None},
+        {"status": "Skip"},
+        {"status": "Cold"},
+        {"track": "mentor"},
+        {"source": "peer_list"},
+        {"company": "Umbrella"},
+        {"email": "pat@umbrella.example"},
+    ],
+)
+def test_the_flag_alone_never_starts_a_watch(overrides):
+    assert outreach.is_watching(standing(**overrides), CFG) is False
+
+
+def watched_job(title="Software Engineer", description="3+ years of experience"):
+    return {"title": title, "description": description}
+
+
+@pytest.mark.parametrize(
+    "title, description",
+    [
+        ("Software Engineer", "2+ years of experience"),
+        ("Software Engineer", "4+ years of experience"),
+        ("Software Engineer", "Build things."),
+        ("Full Stack Engineer", None),
+        ("Senior Software Engineer", "3+ years of experience"),
+    ],
+)
+def test_mid_level_software_roles_match(title, description):
+    assert outreach.watch_reason(watched_job(title, description), CFG, YEARS)
+
+
+@pytest.mark.parametrize(
+    "title, description",
+    [
+        ("Senior Software Engineer", "5+ years of experience"),
+        ("Senior Software Engineer", "Build things."),
+        ("Software Engineer", "1+ years of experience"),
+        ("Software Engineer", "7+ years of experience"),
+        ("Product Analyst", "3+ years of experience"),
+        ("Executive Assistant", "Build things."),
+    ],
+)
+def test_other_roles_do_not_match(title, description):
+    assert outreach.watch_reason(watched_job(title, description), CFG, YEARS) is None
+
+
+def test_watch_reason_explains_the_level():
+    assert outreach.watch_reason(watched_job(), CFG, YEARS) == (
+        "mid level: description asks for 3+ years of experience"
+    )
+
+
+def test_widening_the_levels_in_config_needs_no_code_change():
+    wider = {**CFG, "referral_watch": {"levels": ["mid", "senior"],
+                                       "title_keywords": ["software"]}}
+    job = watched_job("Senior Software Engineer", "5+ years of experience")
+    assert outreach.watch_reason(job, wider, YEARS)
+
+
+def test_no_watch_config_matches_nothing():
+    assert outreach.watch_reason(watched_job(), {}, YEARS) is None
+
+
+def test_standing_referral_is_editable_and_stored_as_a_flag():
+    for value, stored in ((True, 1), (False, 0), ("1", 1), (1, 1)):
+        fields, _ = outreach.plan_update(
+            contact(standing_referral=1 - stored),
+            {"standing_referral": value}, "2026-03-02", CFG,
+        )
+        assert fields == {"standing_referral": stored}
