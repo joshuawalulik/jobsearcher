@@ -190,6 +190,16 @@ def test_reply_rate_label_says_who_it_counts(client, conn):
     assert "of people you messaged first" in client.get("/contacts").text
 
 
+def test_a_new_message_shows_under_due_with_dismiss(client, conn):
+    contact_id = contact(conn, new_message="2026-03-02")
+    html = client.get("/contacts/body").text
+    assert "New message 2026-03-02" in html
+    assert f'hx-post="/contacts/{contact_id}/seen"' in html
+    assert client.post(f"/contacts/{contact_id}/seen").status_code == 200
+    assert db.get_contact(conn, contact_id)["new_message"] is None
+    assert client.post("/contacts/9999/seen").status_code == 404
+
+
 def test_empty_page_renders(client, conn):
     html = client.get("/contacts").text
     assert "No contacts match." in html

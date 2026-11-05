@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "data" / "jobs.db"
+# Saved message history, git-ignored with the rest of data/.
+CONVERSATIONS_DIR = DB_PATH.parent / "conversations"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS companies (
@@ -112,6 +114,14 @@ CREATE TABLE IF NOT EXISTS email_ignored (
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Every message contact_sync has handled, so none is logged twice.
+CREATE TABLE IF NOT EXISTS contact_mail (
+    message_id  TEXT PRIMARY KEY,
+    contact_id  INTEGER,
+    outcome     TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- One row per sweep+rescore run (launchd or the UI button), so the feed
 -- can show what the most recent sweep actually did.
 CREATE TABLE IF NOT EXISTS sweep_runs (
@@ -162,6 +172,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     -- company is watched for matching postings.
     standing_referral INTEGER NOT NULL DEFAULT 0,
     location        TEXT,  -- the market they cover: NY, AZ, Remote
+    new_message     TEXT,  -- day of an inbound message you haven't dealt with
     -- Set when a contact is taken out of the tool. The row stays so the
     -- removal can be undone and a re-import won't bring them back.
     removed_at      TEXT,
@@ -234,6 +245,7 @@ _CONTACT_FIELDS = (
     "priority", "nyc_relevance", "ask", "status", "date_contacted",
     "last_reply", "next_step", "notes", "source", "peer_history",
     "verify_flag", "gmail_draft_id", "standing_referral", "location",
+    "new_message",
 )
 
 
@@ -284,6 +296,8 @@ def init_db(conn: sqlite3.Connection) -> None:
         )
     if "location" not in contact_columns:
         conn.execute("ALTER TABLE contacts ADD COLUMN location TEXT")
+    if "new_message" not in contact_columns:
+        conn.execute("ALTER TABLE contacts ADD COLUMN new_message TEXT")
         conn.commit()
 
 
@@ -1107,6 +1121,22 @@ def fetch_interactions(
         "SELECT * FROM interactions WHERE contact_id = ? ORDER BY date, id",
         (contact_id,),
     ).fetchall()
+
+
+def seen_contact_mail(conn: sqlite3.Connection) -> set[str]:
+    """Message-IDs contact_sync has already handled."""
+    rows = conn.execute("SELECT message_id FROM contact_mail").fetchall()
+    return {row["message_id"] for row in rows}
+
+
+def record_contact_mail(
+    conn: sqlite3.Connection, message_id: str, contact_id: int | None, outcome: str
+) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO contact_mail (message_id, contact_id, outcome) VALUES (?, ?, ?)",
+        (message_id, contact_id, outcome),
+    )
+    conn.commit()
 
 
 def link_contact_application(

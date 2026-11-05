@@ -369,7 +369,7 @@ def _is_bulk(msg: email.message.Message) -> bool:
 
 def parse_message(uid: str, raw: bytes) -> dict:
     """Raw RFC822 bytes → {uid, from_name, from_addr, subject,
-    received_at, body, message_id, bulk}."""
+    received_at, body, message_id, bulk, to_addrs}."""
     msg = email.message_from_bytes(raw)
     from_name, from_addr = email.utils.parseaddr(_decode(msg.get("From")))
     received_at = None
@@ -389,6 +389,11 @@ def parse_message(uid: str, raw: bytes) -> dict:
         "body": _body_text(msg),
         "message_id": (msg.get("Message-ID") or "").strip() or None,
         "bulk": _is_bulk(msg),
+        "to_addrs": [
+            addr.lower() for _, addr in email.utils.getaddresses(
+                [_decode(v) for v in (msg.get_all("To") or []) + (msg.get_all("Cc") or [])]
+            ) if addr
+        ],
     }
 
 

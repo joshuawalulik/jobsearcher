@@ -61,6 +61,7 @@ def contact(**overrides):
         "gmail_draft_id": None,
         "standing_referral": 0,
         "location": None,
+        "new_message": None,
         **overrides,
     }
 
@@ -845,6 +846,92 @@ def test_location_shows_in_the_summary_and_can_be_edited():
     assert outreach.contact_summary(row, "2026-01-05", CFG)["location"] == "AZ"
     fields, _ = outreach.plan_update(row, {"location": " NY "}, "2026-01-05", CFG)
     assert fields["location"] == "NY"
+
+
+def test_a_new_message_flags_the_contact_first():
+    row = contact(status="Sent", date_contacted="2026-01-01", new_message="2026-03-02")
+    assert outreach.attention_reason(row, "2026-03-03", CFG).startswith("New message 2026-03-02")
+
+
+def test_replying_clears_the_new_message_flag():
+    row = contact(status="Replied", new_message="2026-03-02")
+    assert outreach.apply_interaction(row, "out", "2026-03-03", CFG) == {"new_message": None}
+
+
+def test_a_lead_stays_a_lead_when_they_write_again():
+    row = contact(status="Not started", source="linkedin")
+    assert outreach.plan_inbound(row, "2026-03-02", CFG) == {"new_message": "2026-03-02"}
+
+
+def test_an_inbound_message_from_a_real_contact_is_a_reply_and_a_flag():
+    row = contact(status="Sent", source="own_pipeline", date_contacted="2026-03-01")
+    fields = outreach.plan_inbound(row, "2026-03-02", CFG)
+    assert fields["status"] == "Replied"
+    assert fields["last_reply"] == "2026-03-02"
+    assert fields["new_message"] == "2026-03-02"
+
+
+def test_a_new_message_keeps_an_existing_next_step():
+    row = contact(status="Replied", source="own_pipeline", next_step="Wait for the JD",
+                  last_reply="2026-03-01")
+    assert "next_step" not in outreach.plan_inbound(row, "2026-03-02", CFG)
+
+
+def test_do_not_contact_people_are_logged_but_never_flagged():
+    row = contact(status="Skip", company="Umbrella", priority="skip")
+    assert "new_message" not in outreach.plan_inbound(row, "2026-03-02", CFG)
+
+
+@pytest.mark.parametrize("shown", ["Pat Doe", "Pat D.", "Pat Doe, MBA", "pat doe"])
+def test_match_contact_reads_linkedin_display_names(shown):
+    assert outreach.match_contact(shown, [contact(name="Pat Doe")])["id"] == 1
+
+
+def test_match_contact_needs_more_than_a_first_name():
+    assert outreach.match_contact("Pat", [contact(name="Pat Doe")]) is None
+    assert outreach.match_contact("Pat Roe", [contact(name="Pat Doe")]) is None
+
+
+def test_match_contact_never_guesses_between_two():
+    rows = [contact(id=1, name="Pat Doe"), contact(id=2, name="Pat Dunn")]
+    assert outreach.match_contact("Pat D.", rows) is None
+    assert outreach.name_is_ambiguous("Pat D.", rows) is True
+
+
+def test_ignored_lead_checks_names_and_phrases():
+    cfg = {"ignore_names": ["Sam Roe"], "ignore_phrases": ["money back"]}
+    assert outreach.ignored_lead("Sam Roe", "hello", cfg) == "ignored name"
+    assert "money back" in outreach.ignored_lead("Pat Doe", "Your MONEY BACK offer", cfg)
+    assert outreach.ignored_lead("Pat Doe", "We have a role", cfg) is None
+
+
+LEAD_CFG = {
+    "lead_priority": "C",
+    "locations": [
+        {"label": "NY", "words": ["New York", "Brooklyn"]},
+        {"label": "Remote", "words": ["remote"]},
+    ],
+}
+LEAD_TEXT = "Hi Alex,\nA role in Brooklyn.\n\nPat Doe\nTechnical Recruiter at Globex Staffing\npat.doe@globex.example"
+
+
+def test_lead_fields_reads_the_sign_off():
+    fields = outreach.lead_fields("Pat Doe", LEAD_TEXT, LEAD_TEXT, LEAD_CFG)
+    assert fields["company"] == "Globex Staffing"
+    assert fields["kind_detail"] == "Technical Recruiter at Globex Staffing"
+    assert fields["email"] == "pat.doe@globex.example"
+    assert fields["location"] == "NY"
+    assert (fields["source"], fields["priority"]) == ("linkedin", "C")
+
+
+def test_lead_fields_leaves_a_colleagues_email_out():
+    text = "Send your resume to sam@globex.example"
+    assert outreach.lead_fields("Pat Doe", text, text, LEAD_CFG)["email"] is None
+
+
+def test_lead_location_is_blank_when_two_labels_match():
+    text = "Remote or Brooklyn"
+    assert outreach.lead_fields("Pat Doe", text, text, LEAD_CFG)["location"] is None
 
 
 def test_a_track_filter_alone_keeps_c_hidden():

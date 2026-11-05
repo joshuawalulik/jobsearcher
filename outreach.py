@@ -34,9 +34,9 @@ _EDITABLE = (
     "name", "company", "email", "linkedin_url", "kind_detail", "priority",
     "nyc_relevance", "ask", "status", "date_contacted", "last_reply",
     "next_step", "notes", "verify_flag", "gmail_draft_id", "standing_referral",
-    "location",
+    "location", "new_message",
 )
-_DATE_FIELDS = ("date_contacted", "last_reply")
+_DATE_FIELDS = ("date_contacted", "last_reply", "new_message")
 _PRIORITY_ORDER = {"A": 0, "B": 1, "C": 2, None: 3, "skip": 4}
 TRACK_ORDER = ("referral", "mentor", "agency", "company_recruiter", "platform")
 BADGE_PATH = "Referral path"
@@ -118,6 +118,8 @@ def follow_up_due(contact: Mapping, cfg: Mapping) -> date | None:
 
 def attention_reason(contact: Mapping, as_of: str | date, cfg: Mapping) -> str | None:
     """Why this contact needs action on as_of, or None."""
+    if contact["new_message"]:
+        return f"New message {contact['new_message']}: read it and decide what's next"
     due = follow_up_due(contact, cfg)
     if due is not None and due <= _to_date(as_of):
         label = "First" if contact["status"] == "Sent" else "Second"
@@ -224,10 +226,125 @@ def apply_interaction(
     reason = block_reason(contact["company"], contact["email"], cfg)
     if reason:
         raise ValueError(reason)
+    fields = {"new_message": None} if contact["new_message"] else {}
     next_status = _NEXT_OUTBOUND.get(status)
     if next_status is None:
-        return {}
-    return status_change(contact, next_status, day, cfg)
+        return fields
+    return {**fields, **status_change(contact, next_status, day, cfg)}
+
+
+def is_lead(contact: Mapping) -> bool:
+    """Someone who found you on LinkedIn and you haven't engaged."""
+    return contact["status"] == "Not started" and contact["source"] == "linkedin"
+
+
+def plan_inbound(contact: Mapping, on_date: str | date, cfg: Mapping) -> dict:
+    """Fields to write for a message that arrived on its own.
+
+    A lead stays a lead: their pitch isn't a reply, so no Replied status, no
+    last_reply and no referral path. Everyone else follows apply_interaction.
+    Either way the contact is flagged, except do-not-contact people and Skip.
+    """
+    day = _to_date(on_date).isoformat()
+    fields = {} if is_lead(contact) else apply_interaction(contact, "in", day, cfg)
+    flag = not block_reason(contact["company"], contact["email"], cfg)
+    if flag and contact["status"] != "Skip" and (contact["new_message"] or "") < day:
+        fields["new_message"] = day
+    return fields
+
+
+_NAME_NOISE = re.compile(r"\(.*?\)")
+
+
+def _name_tokens(name: str | None) -> list[str]:
+    plain = _NAME_NOISE.sub(" ", (name or "").split(",")[0])
+    return re.sub(r"[.\u200b]", "", plain).lower().split()
+
+
+def _same_person(shown: list[str], saved: list[str]) -> bool:
+    """LinkedIn shows "Pat D." or drops a surname: the first name must match
+    and each later word must start the matching saved word."""
+    if len(shown) < 2 or len(saved) < 2 or shown[0] != saved[0]:
+        return False
+    return all(s.startswith(word) for word, s in zip(shown[1:], saved[1:]))
+
+
+def _name_matches(name: str, contacts: list[Mapping]) -> list[Mapping]:
+    shown = _name_tokens(name)
+    return [c for c in contacts if _same_person(shown, _name_tokens(c["name"]))]
+
+
+def match_contact(name: str, contacts: list[Mapping]) -> Mapping | None:
+    """The one contact with this display name, or None. Never guesses between two."""
+    found = _name_matches(name, contacts)
+    return found[0] if len(found) == 1 else None
+
+
+def name_is_ambiguous(name: str, contacts: list[Mapping]) -> bool:
+    return len(_name_matches(name, contacts)) > 1
+
+
+def ignored_lead(name: str, text: str, cfg: Mapping) -> str | None:
+    """Why an unknown sender shouldn't become a lead, or None."""
+    wanted = _name_tokens(name)
+    for entry in cfg.get("ignore_names") or []:
+        if _name_tokens(entry) == wanted:
+            return "ignored name"
+    lowered = text.lower()
+    for phrase in cfg.get("ignore_phrases") or []:
+        if phrase.lower() in lowered:
+            return f'matched "{phrase}"'
+    return None
+
+
+_SIGN_OFF_COMPANY = re.compile(r"\b(?:at|@)\s+([A-Z][\w&.' -]{1,50}?)\s*$")
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def _location_for(text: str, cfg: Mapping) -> str | None:
+    """The one location label whose words appear, or None if none or several."""
+    labels = [
+        entry["label"] for entry in cfg.get("locations") or []
+        if any(
+            re.search(rf"(?<!\w){re.escape(word)}(?!\w)", text, re.IGNORECASE)
+            for word in entry["words"]
+        )
+    ]
+    return labels[0] if len(labels) == 1 else None
+
+
+def lead_fields(
+    name: str, searchable: str, text: str, cfg: Mapping,
+    headline: str | None = None, profile: str | None = None,
+) -> dict:
+    """A new contact from a recruiter's first message. Only what it plainly
+    says: their headline, given or the line after their name in the sign-off,
+    and an email using their name."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not headline:
+        for index, line in enumerate(lines[:-1]):
+            if line == name:
+                headline = lines[index + 1]
+    company = None
+    if headline:
+        hit = _SIGN_OFF_COMPANY.search(headline.split("|")[0].strip())
+        company = hit.group(1) if hit else None
+    first = _name_tokens(name)[0] if _name_tokens(name) else ""
+    email = next(
+        (found for found in _EMAIL.findall(text) if first and first in found.lower()),
+        None,
+    )
+    return {
+        "name": _NAME_NOISE.sub(" ", name.split(",")[0]).strip(),
+        "company": company,
+        "email": email,
+        "linkedin_url": profile,
+        "kind_detail": headline[:120] if headline else None,
+        "location": _location_for(searchable, cfg),
+        "track": "agency",
+        "source": "linkedin",
+        "priority": cfg.get("lead_priority"),
+    }
 
 
 def check_interaction(channel: str, direction: str, summary: str) -> None:
@@ -381,6 +498,7 @@ def contact_summary(contact: Mapping, as_of: str | date, cfg: Mapping) -> dict:
         "verify_flag": contact["verify_flag"],
         "has_gmail_draft": bool(contact["gmail_draft_id"]),
         "standing_referral": bool(contact["standing_referral"]),
+        "new_message": contact["new_message"],
     }
 
 
