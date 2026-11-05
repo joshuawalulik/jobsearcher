@@ -1,19 +1,27 @@
-"""MCP server exposing the tracker's considering lane to Claude Desktop.
+"""MCP server exposing the tracker and outreach contacts to Claude Desktop.
 
 Stdio server registered in Claude Desktop's claude_desktop_config.json
 (command: .venv/bin/python, args: [<abs path to this file>]). Reads
 data/jobs.db directly, so it works whether or not uvicorn is running.
-The one write tool appends to an application's notes; lane moves and
-everything else stay in the web UI.
+For applications, the one write tool appends to notes; lane moves stay
+in the web UI. Contact tools can read and edit contacts, with the rules
+living in outreach.py. Nothing here sends email: drafts are created
+through the Gmail connector and recorded with update_contact.
 
 Run by hand for debugging: .venv/bin/python mcp_server.py
 """
 
+import functools
 import json
+from datetime import date
 
+import yaml
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 import db
+import outreach
+from profile_io import PROFILE_PATH
 
 mcp = MCPServer(
     "jobsearcher",
@@ -29,7 +37,22 @@ mcp = MCPServer(
         "title, score), and ask which one to work on. Process only the "
         "chosen job (get_job, then the workflow), and offer the next "
         "unprocessed job when it's done. Never batch-process all jobs "
-        "unless explicitly asked to do them all."
+        "unless explicitly asked to do them all.\n\n"
+        "Outreach contacts: list_contacts and get_contact read recruiter and "
+        "referral contacts; list_followups_due and weekly_summary show what "
+        "needs doing; contacts_for_job shows who is at a job's company. "
+        "Rules: nothing here sends email. Create Gmail drafts through the "
+        "Gmail connector only, record the draft with update_contact, and let "
+        "the user send it and then mark it Sent. Never invent a name or an "
+        "email. peer_history is someone else's experience with that contact, "
+        "not the user's relationship, so never imply prior contact from it. "
+        "Only referral_path=true means a real connection; a name on a list is "
+        "not a way in. Company recruiters from a list get a pointer ask (who "
+        "handles experienced engineering hiring), never a job request. "
+        "Agencies get asked whether they are working relevant searches. "
+        "Referrals need rapport first, so a first touch is never a referral "
+        "ask. Show any warnings a tool returns to the user. If do_not_contact "
+        "is set, never draft to or suggest that person."
     ),
 )
 
@@ -117,6 +140,305 @@ def save_application_note(app_id: int, text: str) -> str:
     finally:
         conn.close()
     return f"Saved to notes for app_id {app_id}."
+
+
+class Refused(ToolError, ValueError):
+    """A rule said no. The MCP library hides a plain ValueError's message from
+    the client, and the reason is the whole point of a refusal, so it has to
+    arrive as a ToolError.
+    """
+
+
+def _contact_tool(fn):
+    """Register a contact tool whose ValueErrors reach the client as reasons."""
+
+    @functools.wraps(fn)
+    def explained(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except ValueError as exc:
+            raise Refused(str(exc)) from exc
+
+    return mcp.tool()(explained)
+
+
+def _outreach_cfg() -> dict:
+    # Read per call so profile edits apply without restarting the server.
+    return yaml.safe_load(PROFILE_PATH.read_text())["outreach"]
+
+
+def _today() -> str:
+    return date.today().isoformat()
+
+
+def _require_contact(conn, contact_id: int):
+    row = db.get_contact(conn, contact_id)
+    if row is None:
+        raise ValueError(f"no contact with contact_id {contact_id}")
+    return row
+
+
+def _write_and_read(conn, contact_id: int, fields: dict, warnings: list[str], cfg: dict) -> dict:
+    db.update_contact(conn, contact_id, **fields)
+    row = db.get_contact(conn, contact_id)
+    return {"contact": outreach.contact_summary(row, _today(), cfg), "warnings": warnings}
+
+
+@_contact_tool
+def list_contacts(
+    track: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    company: str | None = None,
+) -> list[dict]:
+    """Recruiter and referral contacts, best priority first.
+
+    Filters: track (agency, company_recruiter, referral, platform), status,
+    priority (A, B, C, skip), and company (any part of the name). Skipped
+    contacts are hidden unless status="Skip". Use get_contact(contact_id) for
+    peer history, the interaction log and a message template.
+    """
+    cfg = _outreach_cfg()
+    conn = _connect()
+    try:
+        rows = db.fetch_contacts(conn)
+    finally:
+        conn.close()
+    matches = outreach.filter_contacts(
+        rows, cfg, track=track, status=status, priority=priority, company=company
+    )
+    return [outreach.contact_summary(c, _today(), cfg) for c in matches]
+
+
+@_contact_tool
+def get_contact(contact_id: int) -> dict:
+    """Everything about one contact, plus a message template if one fits.
+
+    peer_history is someone else's experience with this contact, kept as a
+    reference for what might happen. It is not the user's relationship.
+    suggested_template is null when a personal message is needed or none
+    should be sent.
+    """
+    cfg = _outreach_cfg()
+    conn = _connect()
+    try:
+        row = _require_contact(conn, contact_id)
+        interactions = db.fetch_interactions(conn, contact_id)
+    finally:
+        conn.close()
+    return {
+        **dict(row),
+        **outreach.contact_summary(row, _today(), cfg),
+        "double_up_warning": outreach.double_up_warning(row["company"], cfg),
+        "interactions": [dict(i) for i in interactions],
+        "suggested_template": outreach.suggest_template(row, cfg),
+    }
+
+
+@_contact_tool
+def add_contact(
+    track: str,
+    name: str | None = None,
+    company: str | None = None,
+    email: str | None = None,
+    linkedin_url: str | None = None,
+    kind_detail: str | None = None,
+    priority: str | None = None,
+    nyc_relevance: str | None = None,
+    ask: str | None = None,
+    next_step: str | None = None,
+    notes: str | None = None,
+    source: str | None = None,
+) -> dict:
+    """Add a contact. track is agency, company_recruiter, referral or platform.
+
+    Needs a name or a company, so a firm with no person yet is fine. Never
+    invent a name or an email: leave unknown fields out. If the email is
+    already saved, nothing is added and the existing contact comes back.
+    Returns warnings to show the user.
+    """
+    cfg = _outreach_cfg()
+    conn = _connect()
+    try:
+        existing = db.fetch_contacts(conn)
+        duplicate = outreach.find_duplicate(email, existing)
+        if duplicate:
+            return {
+                "added": False,
+                "contact": outreach.contact_summary(duplicate, _today(), cfg),
+                "warnings": [f"Already saved as contact {duplicate['id']}"],
+            }
+        fields, warnings = outreach.plan_new_contact(
+            {
+                "track": track, "name": name, "company": company, "email": email,
+                "linkedin_url": linkedin_url, "kind_detail": kind_detail,
+                "priority": priority, "nyc_relevance": nyc_relevance, "ask": ask,
+                "next_step": next_step, "notes": notes, "source": source,
+            },
+            existing,
+            cfg,
+        )
+        contact_id = db.insert_contact(conn, **fields)
+        row = db.get_contact(conn, contact_id)
+    finally:
+        conn.close()
+    return {
+        "added": True,
+        "contact": outreach.contact_summary(row, _today(), cfg),
+        "warnings": warnings,
+    }
+
+
+@_contact_tool
+def update_contact(contact_id: int, fields: dict) -> dict:
+    """Update a contact: status, dates, next_step, notes, gmail_draft_id and more.
+
+    notes appends and never overwrites. Marking a contact Sent starts the
+    follow-up clock, so only do that once the user has actually sent it.
+    Saving gmail_draft_id moves a Not started contact to Drafted. Skipped
+    contacts come back through restore_contact. Do-not-contact people are
+    refused. Returns warnings to show the user.
+    """
+    cfg = _outreach_cfg()
+    conn = _connect()
+    try:
+        row = _require_contact(conn, contact_id)
+        changes, warnings = outreach.plan_update(row, fields, _today(), cfg)
+        if "email" in changes:
+            others = [c for c in db.fetch_contacts(conn) if c["id"] != contact_id]
+            duplicate = outreach.find_duplicate(changes["email"], others)
+            if duplicate:
+                raise ValueError(f"Email already used by contact {duplicate['id']}")
+        return _write_and_read(conn, contact_id, changes, warnings, cfg)
+    finally:
+        conn.close()
+
+
+@_contact_tool
+def restore_contact(contact_id: int) -> dict:
+    """Bring a skipped contact back to Not started so it can be worked again.
+
+    Keeps the original skip reason in the notes. Do-not-contact people are
+    refused: taking one off that list is the user's edit in profile.yaml.
+    """
+    cfg = _outreach_cfg()
+    conn = _connect()
+    try:
+        row = _require_contact(conn, contact_id)
+        fields = outreach.restore_fields(row, cfg)
+        return _write_and_read(conn, contact_id, fields, [], cfg)
+    finally:
+        conn.close()
+
+
+@_contact_tool
+def log_interaction(
+    contact_id: int,
+    channel: str,
+    direction: str,
+    summary: str,
+    date: str | None = None,
+) -> dict:
+    """Log a message or call, then update the contact's status and last_reply.
+
+    channel is email, linkedin, call or in_person. direction is out or in.
+    date is YYYY-MM-DD and defaults to today. An inbound message moves earlier
+    statuses to Replied. An outbound one moves the contact along the send
+    sequence, and is refused for do-not-contact people.
+    """
+    if not summary.strip():
+        raise ValueError("summary is empty")
+    if channel not in db.INTERACTION_CHANNELS:
+        raise ValueError(f"channel must be one of {list(db.INTERACTION_CHANNELS)}")
+    if direction not in db.INTERACTION_DIRECTIONS:
+        raise ValueError(f"direction must be one of {list(db.INTERACTION_DIRECTIONS)}")
+    cfg = _outreach_cfg()
+    on_date = outreach.iso_date(date or _today())
+    conn = _connect()
+    try:
+        row = _require_contact(conn, contact_id)
+        # Worked out first, so a refused interaction leaves no log entry.
+        fields = outreach.apply_interaction(row, direction, on_date, cfg)
+        db.add_interaction(conn, contact_id, on_date, channel, direction, summary.strip())
+        return _write_and_read(conn, contact_id, fields, [], cfg)
+    finally:
+        conn.close()
+
+
+@_contact_tool
+def list_followups_due(as_of: str | None = None) -> list[dict]:
+    """Contacts needing action as of a date (default today), oldest first.
+
+    Covers follow-ups due or overdue, replies with no next step, and contacts
+    to mark Cold after two follow-ups. needs_action says which.
+    """
+    cfg = _outreach_cfg()
+    day = outreach.iso_date(as_of or _today())
+    conn = _connect()
+    try:
+        rows = db.fetch_contacts(conn)
+    finally:
+        conn.close()
+    return [
+        outreach.contact_summary(contact, day, cfg)
+        for contact, _ in outreach.follow_ups_due(rows, day, cfg)
+    ]
+
+
+@_contact_tool
+def contacts_for_job(app_id: int) -> dict:
+    """Active contacts at a tracked job's company, grouped by track.
+
+    referral_path is true only for a real connection: the user's own pipeline
+    or someone who has replied. Other contacts are cold leads, not a way in.
+    Also includes anyone linked to this application.
+    """
+    cfg = _outreach_cfg()
+    conn = _connect()
+    try:
+        application = db.get_application(conn, app_id)
+        if application is None:
+            raise ValueError(f"no application with app_id {app_id}")
+        rows = db.fetch_contacts(conn)
+        linked = db.linked_contact_ids(conn, app_id)
+    finally:
+        conn.close()
+    return {
+        "app_id": app_id,
+        **outreach.contacts_for_company(rows, application["company"], linked, _today(), cfg),
+    }
+
+
+@_contact_tool
+def link_contact_to_job(contact_id: int, app_id: int, note: str | None = None) -> str:
+    """Tie a contact to a specific tracked job, such as a req a recruiter submitted."""
+    conn = _connect()
+    try:
+        _require_contact(conn, contact_id)
+        if db.get_application(conn, app_id) is None:
+            raise ValueError(f"no application with app_id {app_id}")
+        db.link_contact_application(conn, contact_id, app_id, note)
+    finally:
+        conn.close()
+    return f"Linked contact {contact_id} to app_id {app_id}."
+
+
+@_contact_tool
+def weekly_summary(week_of: str | None = None) -> dict:
+    """Pipeline counts, follow-ups due, reply rate and progress for a week.
+
+    week_of is any date in the week, default today. Targets are a guide and
+    aren't enforced.
+    """
+    cfg = _outreach_cfg()
+    day = outreach.iso_date(week_of or _today())
+    conn = _connect()
+    try:
+        rows = db.fetch_contacts(conn)
+        interactions = db.fetch_interactions(conn)
+    finally:
+        conn.close()
+    return outreach.weekly_summary(rows, interactions, day, cfg)
 
 
 if __name__ == "__main__":
