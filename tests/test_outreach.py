@@ -368,7 +368,10 @@ def test_inactive_contacts_are_never_a_path(status):
 
 
 def _rows(*statuses):
-    return [contact(id=i, status=s) for i, s in enumerate(statuses, 1)]
+    return [
+        contact(id=i, status=s, date_contacted="2026-03-02")
+        for i, s in enumerate(statuses, 1)
+    ]
 
 
 def test_reply_rate_matches_the_seed_workbook_summary():
@@ -384,6 +387,20 @@ def test_reply_rate_matches_the_seed_workbook_summary():
     assert outreach.reply_rate(agencies + company + referrals) == 0.75
 
 
+def test_people_who_reached_out_first_stay_out_of_reply_rate():
+    rows = [
+        contact(id=1, status="Replied", date_contacted="2026-03-02"),
+        contact(id=2, status="Sent", date_contacted="2026-03-02"),
+        contact(id=3, status="Replied"),
+        contact(id=4, status="Replied"),
+    ]
+    assert outreach.reply_rate(rows) == 0.5
+
+
+def test_reply_rate_is_zero_when_only_inbound_contacts_exist():
+    assert outreach.reply_rate([contact(status="Replied")]) == 0.0
+
+
 def test_cold_counts_against_reply_rate():
     assert outreach.reply_rate(_rows("Replied", "Cold")) == 0.5
 
@@ -393,7 +410,8 @@ def test_weekly_summary_counts_and_progress():
         contact(id=1, track="agency", status="Sent", date_contacted="2026-03-02"),
         contact(id=2, track="agency", status="Sent", date_contacted="2026-02-23"),
         contact(id=3, status="Sent", date_contacted="2026-03-08"),
-        contact(id=4, track="referral", status="Replied", next_step="Call"),
+        contact(id=4, track="referral", status="Replied", next_step="Call",
+                date_contacted="2026-02-23"),
         contact(id=5, status="Skip"),
     ]
     interactions = [
@@ -934,8 +952,8 @@ def test_mentor_gets_no_template():
 
 def test_mentors_stay_out_of_reply_rate():
     rows = [
-        contact(id=1, status="Replied"),
-        contact(id=2, status="Sent"),
+        contact(id=1, status="Replied", date_contacted="2026-03-02"),
+        contact(id=2, status="Sent", date_contacted="2026-03-02"),
         mentor(id=3, status="Sent"),
         mentor(id=4, status="Sent"),
     ]

@@ -27,7 +27,7 @@
       <dt>Location</dt><dd>{{ c.location or '—' }}</dd>
       <dt>NYC</dt><dd>{{ c.nyc_relevance or '—' }}</dd>
       <dt>Ask</dt><dd>{{ c.ask or '—' }}</dd>
-      <dt>Notes</dt><dd>{{ c.notes or '—' }}</dd>
+      <dt>Notes</dt><dd>{{ (c.notes | link_conversations) if c.notes else '—' }}</dd>
     </dl>
     {% if c.gmail_draft_id %}
     <p class="modal-status"><a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">Open Gmail Drafts &nearr;</a></p>

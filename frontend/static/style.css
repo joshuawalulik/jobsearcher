@@ -477,6 +477,8 @@ a.contact-badge:hover { border-color: var(--accent); color: var(--accent); }
 .contact-section h3 { margin: 0 0 0.4rem; font-size: 0.95rem; }
 .contact-section summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 .peer-history { white-space: pre-line; margin: 0.5rem 0 0; }
+.conversation { white-space: pre-wrap; overflow-wrap: anywhere; }
+.conversation h1, .conversation h2 { margin: 0; }
 .contact-template {
   white-space: pre-wrap;
   font: inherit;
