@@ -1,0 +1,123 @@
+{# One contact, loaded into #modal. Forms post back here, so refusals and
+   warnings show inline. Closes on the X, a click outside, or Escape. #}
+<div class="modal-overlay" onclick="if (event.target === this) this.remove()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="{{ c.name or c.company }}">
+    <button class="modal-close" type="button" aria-label="Close"
+            onclick="this.closest('.modal-overlay').remove()">&times;</button>
+    <h2>{{ c.name or c.company }}</h2>
+    <p class="meta">
+      {{ c.company or 'No company' }} · {{ c.track | replace('_', ' ') | capitalize }}
+      {% if c.kind_detail %} · {{ c.kind_detail }}{% endif %}
+    </p>
+    <p class="modal-status">
+      <span class="tracked">{{ c.status }}</span>
+      {% if c.referral_path %}<span class="contact-badge path">Referral path</span>{% endif %}
+      {% if c.follow_up_due %} · follow-up due {{ c.follow_up_due }}{% endif %}
+    </p>
+    {% if error %}<p class="status error">{{ error }}</p>{% endif %}
+    {% for w in warnings %}<p class="status error">{{ w }}</p>{% endfor %}
+    {% if c.do_not_contact %}<p class="status error">{{ c.do_not_contact }}</p>{% endif %}
+    {% if c.needs_action %}<p class="status error">{{ c.needs_action }}</p>{% endif %}
+    {% if c.verify_flag %}<p class="verify-note"><span class="verify-flag">Verify</span> {{ c.verify_flag }}</p>{% endif %}
+    {% if double_up and c.status not in ('Skip', 'Cold') %}<p class="status error">{{ double_up }}</p>{% endif %}
+
+    <dl class="modal-details">
+      <dt>Email</dt><dd>{{ c.email or '—' }}</dd>
+      <dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">Open profile &nearr;</a>{% else %}—{% endif %}</dd>
+      <dt>NYC</dt><dd>{{ c.nyc_relevance or '—' }}</dd>
+      <dt>Ask</dt><dd>{{ c.ask or '—' }}</dd>
+      <dt>Notes</dt><dd>{{ c.notes or '—' }}</dd>
+    </dl>
+    {% if c.gmail_draft_id %}
+    <p class="modal-status"><a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">Open Gmail Drafts &nearr;</a></p>
+    {% endif %}
+
+    {% if c.peer_history %}
+    <details class="contact-section">
+      <summary>Peer history</summary>
+      <p class="hint">Someone else's experience with this contact, as a guide to what
+      might happen. It isn't your relationship with them.</p>
+      <p class="peer-history">{{ c.peer_history }}</p>
+    </details>
+    {% endif %}
+
+    {% if template %}
+    <details class="contact-section">
+      <summary>Suggested message</summary>
+      {% if template.subject %}<p class="hint">Subject: {{ template.subject }}</p>{% endif %}
+      <pre class="contact-template">{{ template.body }}</pre>
+      <button type="button"
+              onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent); this.textContent = 'Copied'">Copy message</button>
+    </details>
+    {% endif %}
+
+    <section class="contact-section">
+      <h3>Log</h3>
+      {% if interactions %}
+      <ul class="contact-log">
+        {% for i in interactions %}
+        <li>{{ i.date }} · {{ 'They replied' if i.direction == 'in' else 'You reached out' }} · {{ i.channel | replace('_', ' ') }}<br>{{ i.summary }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">Nothing logged yet.</p>
+      {% endif %}
+      <details>
+        <summary>Add to the log</summary>
+        <form class="contact-form" hx-post="/contacts/{{ c.contact_id }}/interactions"
+              hx-target="#modal" hx-swap="innerHTML">
+          <div class="contact-form-grid">
+            <label>What happened
+              <select name="direction">
+                <option value="out" {% if c.do_not_contact %}disabled{% endif %}>You reached out</option>
+                <option value="in" {% if c.do_not_contact %}selected{% endif %}>They replied</option>
+              </select>
+            </label>
+            <label>How
+              <select name="channel">
+                {% for ch in channels %}<option value="{{ ch }}">{{ ch | replace('_', ' ') | capitalize }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>Date <input type="date" name="on_date" value="{{ today }}"></label>
+          </div>
+          <label>Summary <input type="text" name="summary" required></label>
+          <button class="save" type="submit">Add to log</button>
+        </form>
+      </details>
+    </section>
+
+    <details class="contact-section">
+      <summary>Edit</summary>
+      <form class="contact-form" hx-post="/contacts/{{ c.contact_id }}" hx-target="#modal" hx-swap="innerHTML">
+        <div class="contact-form-grid">
+          {% if c.status != 'Skip' %}
+          <label>Status
+            <select name="status">
+              {% for s in statuses %}<option value="{{ s }}" {% if s == c.status %}selected{% endif %}>{{ s }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Priority
+            <select name="priority">
+              <option value="" {% if not c.priority %}selected{% endif %}>None</option>
+              {% for p in priorities %}<option value="{{ p }}" {% if p == c.priority %}selected{% endif %}>{{ p }}</option>{% endfor %}
+            </select>
+          </label>
+          {% endif %}
+          <label>Name <input type="text" name="name" value="{{ c.name or '' }}"></label>
+          <label>Company <input type="text" name="company" value="{{ c.company or '' }}"></label>
+          <label>Email <input type="email" name="email" value="{{ c.email or '' }}"></label>
+          <label>LinkedIn URL <input type="url" name="linkedin_url" value="{{ c.linkedin_url or '' }}"></label>
+          <label>What they do <input type="text" name="kind_detail" value="{{ c.kind_detail or '' }}"></label>
+          <label>Ask <input type="text" name="ask" value="{{ c.ask or '' }}"></label>
+          <label>Next step <input type="text" name="next_step" value="{{ c.next_step or '' }}"></label>
+          <label>First contacted <input type="date" name="date_contacted" value="{{ c.date_contacted or '' }}"></label>
+          <label>Last reply <input type="date" name="last_reply" value="{{ c.last_reply or '' }}"></label>
+          <label>Verify before sending <input type="text" name="verify_flag" value="{{ c.verify_flag or '' }}"></label>
+        </div>
+        <label>Add a note <textarea name="notes" rows="2"></textarea></label>
+        <p class="hint">Marking someone Sent starts their follow-up clock, so do it once the message has really gone out.</p>
+        <button class="save" type="submit">Save</button>
+      </form>
+    </details>
+  </div>
+</div>

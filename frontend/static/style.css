@@ -416,3 +416,76 @@ textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); ou
 .gate-group th, .gate-group td { text-align: left; padding: 0.3rem 0.5rem; border-top: 1px solid var(--line); vertical-align: top; }
 .gate-group th { color: var(--muted); font-weight: 600; border-top: none; }
 .gate-group td.reason { color: var(--muted); }
+
+/* --- outreach contacts --- */
+.nav-count:not(:empty) {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.contact-tabs { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.contact-tabs a { color: var(--muted); text-decoration: none; font-weight: 600; }
+.contact-tabs a.active { color: var(--accent); }
+.contact-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.contact-filters .search { margin-left: 0; }
+.contact-filters .show-c { color: var(--muted); font-weight: 500; white-space: nowrap; }
+.contact-section-head { font-size: 1.05rem; margin: 1.25rem 0 0; }
+.contact-row { cursor: pointer; }
+.contact-row:hover { background: var(--bg); }
+.contact-due { color: var(--bad); font-weight: 600; }
+.contact-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+a.contact-badge:hover { border-color: var(--accent); color: var(--accent); }
+.contact-badge.path { border-color: var(--good); color: var(--good); }
+.verify-flag {
+  margin-left: 0.35rem;
+  color: var(--bad);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.verify-note { margin: 0.5rem 0 0; }
+.verify-note .verify-flag { margin-left: 0; }
+.do-not-contact { color: var(--bad); font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.modal .status { margin: 0.5rem 0 0; }
+.contact-section { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 0.75rem; }
+.contact-section h3 { margin: 0 0 0.4rem; font-size: 0.95rem; }
+.contact-section summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+.peer-history { white-space: pre-line; margin: 0.5rem 0 0; }
+.contact-template {
+  white-space: pre-wrap;
+  font: inherit;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+}
+.contact-log { list-style: none; margin: 0 0 0.6rem; padding: 0; font-size: 0.9rem; }
+.contact-log li { padding: 0.3rem 0; border-top: 1px solid var(--line); }
+.contact-log li:first-child { border-top: none; }
+.contact-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.6rem; }
+.contact-form .save { align-self: flex-start; }
+.contact-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.6rem 0.9rem;
+}
+.contact-form-grid label, .contact-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}

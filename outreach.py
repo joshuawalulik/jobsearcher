@@ -35,6 +35,9 @@ _EDITABLE = (
 )
 _DATE_FIELDS = ("date_contacted", "last_reply")
 _PRIORITY_ORDER = {"A": 0, "B": 1, "C": 2, None: 3, "skip": 4}
+TRACK_ORDER = ("referral", "agency", "company_recruiter", "platform")
+BADGE_PATH = "Referral path"
+BADGE_CONTACT = "Contact"
 
 
 def _to_date(value: str | date) -> date:
@@ -223,6 +226,16 @@ def apply_interaction(
     return status_change(contact, next_status, day, cfg)
 
 
+def check_interaction(channel: str, direction: str, summary: str) -> None:
+    """Raises ValueError for anything the interaction log can't hold."""
+    if not summary.strip():
+        raise ValueError("summary is empty")
+    if channel not in db.INTERACTION_CHANNELS:
+        raise ValueError(f"channel must be one of {list(db.INTERACTION_CHANNELS)}")
+    if direction not in db.INTERACTION_DIRECTIONS:
+        raise ValueError(f"direction must be one of {list(db.INTERACTION_DIRECTIONS)}")
+
+
 def has_referral_path(contact: Mapping) -> bool:
     """True for a real connection: your own pipeline, or someone who replied.
 
@@ -335,24 +348,103 @@ def filter_contacts(
     status: str | None = None,
     priority: str | None = None,
     company: str | None = None,
+    search: str | None = None,
 ) -> list[Mapping]:
     """Contacts matching every filter, best priority first.
 
     Skip stays hidden unless status="Skip" asks for it. company matches any
     part of a name, after aliases, so "Chase" and a partial name both work.
+    search also looks at names and emails.
     """
     query = company_key(company, cfg)
+    text = (search or "").strip().lower()
+    text_key = company_key(search, cfg)
+
+    def found(contact: Mapping) -> bool:
+        return (
+            (text_key and text_key in company_key(contact["company"], cfg))
+            or text in (contact["name"] or "").lower()
+            or text in (contact["email"] or "").lower()
+        )
+
     rows = [
         c for c in contacts
         if (c["status"] == status if status else c["status"] != "Skip")
         and (not track or c["track"] == track)
         and (not priority or c["priority"] == priority)
         and (not query or query in company_key(c["company"], cfg))
+        and (not text or found(c))
     ]
     return sorted(
         rows,
         key=lambda c: (_PRIORITY_ORDER[c["priority"]], (c["name"] or "").lower(), c["id"]),
     )
+
+
+def visible_contacts(
+    contacts: list[Mapping],
+    cfg: Mapping,
+    track: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    search: str | None = None,
+    show_c: bool = False,
+) -> list[Mapping]:
+    """What the Contacts page lists. Priority C stays out of the default view.
+
+    Unranked contacts always show, because the people you actually know have no
+    priority. Searching or filtering by status or priority finds C contacts too:
+    someone you look for by name should never come back empty.
+    """
+    rows = filter_contacts(
+        contacts, cfg, track=track, status=status, priority=priority, search=search
+    )
+    if show_c or search or status or priority:
+        return rows
+    return [c for c in rows if c["priority"] != "C"]
+
+
+def group_by_track(contacts: list[Mapping]) -> list[tuple[str, list[Mapping]]]:
+    """(track, contacts) in display order, real relationships first."""
+    return [
+        (track, rows)
+        for track in TRACK_ORDER
+        if (rows := [c for c in contacts if c["track"] == track])
+    ]
+
+
+def company_badges(contacts: list[Mapping], cfg: Mapping) -> dict[str, str]:
+    """Job-card labels by company_key.
+
+    "Referral path" for a real connection, "Contact" for an active A or B
+    contact with no connection yet. A real connection always wins.
+    """
+    badges: dict[str, str] = {}
+    for contact in contacts:
+        key = company_key(contact["company"], cfg)
+        if not key or contact["status"] in _INACTIVE:
+            continue
+        if has_referral_path(contact):
+            badges[key] = BADGE_PATH
+        elif contact["priority"] in ("A", "B"):
+            badges.setdefault(key, BADGE_CONTACT)
+    return badges
+
+
+def linked_badges(
+    contacts: list[Mapping], links: list[Mapping]
+) -> dict[int, str]:
+    """Referral labels by application_id, for contacts tied to a specific job.
+
+    An agency recruiter's company won't match the job's, so the link is what
+    connects them.
+    """
+    by_id = {c["id"]: c for c in contacts}
+    return {
+        link["application_id"]: BADGE_PATH
+        for link in links
+        if link["contact_id"] in by_id and has_referral_path(by_id[link["contact_id"]])
+    }
 
 
 def contacts_for_company(

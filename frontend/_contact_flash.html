@@ -1,0 +1,3 @@
+{% if error %}<p class="status error">{{ error }}</p>{% endif %}
+{% if saved %}<p class="status ok">Added {{ saved }}.</p>{% endif %}
+{% for w in warnings or [] %}<p class="status error">{{ w }}</p>{% endfor %}

@@ -7,6 +7,7 @@
         {{ job.company }}
         {% if job.location %} · {{ job.location }}{% endif %}
         {% if job.posted_at %} · posted {{ job.posted_at[:10] }}{% endif %}
+        {% if job.contact_badge %}<a class="contact-badge{% if job.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ job.company | urlencode }}">{{ job.contact_badge }}</a>{% endif %}
       </p>
     </div>
     {% if job.tracked %}

@@ -946,6 +946,12 @@ def linked_contact_ids(conn: sqlite3.Connection, application_id: int) -> set[int
     return {row["contact_id"] for row in rows}
 
 
+def fetch_contact_links(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT contact_id, application_id FROM contact_applications"
+    ).fetchall()
+
+
 def table_names(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"

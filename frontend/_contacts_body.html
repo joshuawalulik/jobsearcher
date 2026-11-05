@@ -1,0 +1,97 @@
+{# Everything below the filters. Reloaded when filters change or a contact is
+   edited, so Due today and This week never go stale. #}
+<div class="contact-tabs">
+  <a href="/contacts" {% if tab == 'active' %}class="active"{% endif %}>Active ({{ active_count }})</a>
+  <a href="/contacts?tab=skipped" {% if tab == 'skipped' %}class="active"{% endif %}>Skipped ({{ skipped_count }})</a>
+</div>
+{% if tab == 'active' %}
+<section class="panel">
+  <h2>Due today</h2>
+  {% if due %}
+  <table>
+    <thead><tr><th>Name</th><th>Company</th><th>What's needed</th></tr></thead>
+    <tbody>
+      {% for c in due %}
+      <tr class="contact-row" hx-get="/contacts/{{ c.contact_id }}/modal" hx-target="#modal"
+          hx-swap="innerHTML" hx-trigger="click[opensContactModal(event)]">
+        <td>{{ c.name or c.company }}</td>
+        <td>{{ c.company or '—' }}</td>
+        <td class="contact-due">{{ c.needs_action }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">Nothing due.</p>
+  {% endif %}
+</section>
+<section>
+  <h2 class="contact-section-head">This week</h2>
+  <div class="kpis">
+    <div class="stat">
+      <span class="stat-label">Reply rate</span>
+      <span class="stat-value">{{ '%.0f' % (week.reply_rate * 100) }}%</span>
+      <span class="stat-sub">of everyone contacted</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Agency recruiters messaged</span>
+      <span class="stat-value">{{ week.progress.agency_first_touches.done }}</span>
+      <span class="stat-sub">target {{ week.progress.agency_first_touches.target }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Company recruiters emailed</span>
+      <span class="stat-value">{{ week.progress.company_recruiter_emails.done }}</span>
+      <span class="stat-sub">target {{ week.progress.company_recruiter_emails.target_min }} to {{ week.progress.company_recruiter_emails.target_max }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Referral touches</span>
+      <span class="stat-value">{{ week.progress.referral_touches.done }}</span>
+      <span class="stat-sub">target {{ week.progress.referral_touches.target }}</span>
+    </div>
+  </div>
+  <p class="hint">
+    {% for status, count in week.by_status.items() %}{{ status }} {{ count }}{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+</section>
+{% endif %}
+{% for track, rows in groups %}
+<section class="panel">
+  <h2>{{ {'referral': 'Referrals', 'agency': 'Agencies', 'company_recruiter': 'Company recruiters', 'platform': 'Platforms'}[track] }} ({{ rows | length }})</h2>
+  <table>
+    <thead>
+      {% if tab == 'skipped' %}
+      <tr><th>Name</th><th>Company</th><th>Why skipped</th><th></th></tr>
+      {% else %}
+      <tr><th>Name</th><th>Company</th><th>Priority</th><th>Status</th><th>Next step</th><th>Follow-up due</th><th>Last reply</th></tr>
+      {% endif %}
+    </thead>
+    <tbody>
+      {% for c in rows %}
+      <tr class="contact-row" hx-get="/contacts/{{ c.contact_id }}/modal" hx-target="#modal"
+          hx-swap="innerHTML" hx-trigger="click[opensContactModal(event)]">
+        <td>{{ c.name or '—' }}
+          {% if c.referral_path %}<span class="contact-badge path">Referral path</span>{% endif %}
+          {% if c.verify_flag %}<span class="verify-flag" title="{{ c.verify_flag }}">Verify</span>{% endif %}
+        </td>
+        <td>{{ c.company or '—' }}</td>
+        {% if tab == 'skipped' %}
+        <td>{{ c.do_not_contact or c.notes or c.ask or '—' }}</td>
+        <td class="num">
+          {% if c.do_not_contact %}<span class="do-not-contact">Do not contact</span>
+          {% else %}<button class="restore" hx-post="/contacts/{{ c.contact_id }}/restore" hx-swap="none">Restore</button>{% endif %}
+        </td>
+        {% else %}
+        <td>{{ c.priority or '—' }}</td>
+        <td>{{ c.status }}</td>
+        <td>{{ c.next_step or '—' }}</td>
+        <td {% if c.needs_action and c.follow_up_due %}class="contact-due"{% endif %}>{{ c.follow_up_due or '—' }}</td>
+        <td>{{ c.last_reply or '—' }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<p class="empty">No contacts match.</p>
+{% endfor %}
