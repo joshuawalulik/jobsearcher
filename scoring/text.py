@@ -58,6 +58,72 @@ _TECH_SCOPED_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Postings that never say "experience": "6+ years building and shipping web
+# products", "Minimum 5 years of software development". Only consulted when
+# _YEARS_PATTERN finds nothing, so it can't change a posting that already
+# reads. Deliberately strict, because bare "N years" text is usually about
+# something else (benefits vesting, "18 years of age", company history, a
+# founder's bio): the number must look like a requirement ("N+", a range, or
+# a minimum) and the words after it must be about engineering work.
+_REQUIREMENT_NUMBER = (
+    r"(?<![\d.])(?:"
+    r"(\d{1,2}(?:\.\d{1,2})?)(?:\s*(?:[-–—]|to)\s*\d{1,2}(?:\.\d{1,2})?\s*\+?|\s*\+)"
+    r"|(?<=minimum )(\d{1,2}(?:\.\d{1,2})?)"
+    r"|(?<=minimum of )(\d{1,2}(?:\.\d{1,2})?)"
+    r"|(?<=min )(\d{1,2}(?:\.\d{1,2})?)"
+    r"|(?<=at least )(\d{1,2}(?:\.\d{1,2})?)"
+    r")"
+)
+_ENGINEERING_WORK = (
+    r"software|engineering|development|programming|coding|web|"
+    r"back[- ]?end|front[- ]?end|full[- ]?stack"
+)
+_YEARS_OF_ENGINEERING_PATTERN = re.compile(
+    _REQUIREMENT_NUMBER
+    + r"\s*(?:years?|yrs?)['’]?\s+(?:"
+    # "5+ years building", "5+ years of hands-on software development"
+    r"(?:of\s+)?(?:(?:hands[- ]on|professional|production|commercial|industry)\s+)*"
+    rf"(?:building|developing|shipping|writing|designing|{_ENGINEERING_WORK})\b"
+    # "5+ years in software", "5+ years in a backend role"
+    rf"|in\s+(?:an?\s+|the\s+)?(?:(?:professional|production|similar)\s+)*(?:{_ENGINEERING_WORK})\b"
+    # "5+ years as a senior software engineer"
+    r"|as\s+an?\s+(?:[\w/-]+\s+){0,3}?(?:engineer|developer|programmer)\b"
+    # "5+ years working as a developer", "5+ years working in engineering"
+    rf"|working\s+(?:as\s+an?\s+(?:[\w/-]+\s+){{0,3}}?(?:engineer|developer|programmer)\b"
+    rf"|in\s+(?:an?\s+)?(?:{_ENGINEERING_WORK})\b)"
+    r")",
+    re.IGNORECASE,
+)
+
+# "5+ years building software, with at least 1-2 years on LLM apps": what
+# follows "with" narrows the main bar, it doesn't replace it. Without this the
+# lowest number would win and a five-year role would read as one. It only
+# counts as narrowing when an earlier years figure sits in the same sentence:
+# "a degree or equivalent, with 5+ years building software" IS the main bar.
+_SUB_REQUIREMENT_LEAD = re.compile(
+    r"\b(?:with|including|plus)\s+(?:(?:at\s+least|a\s+minimum\s+of|minimum(?:\s+of)?|min)\s+)?$",
+    re.IGNORECASE,
+)
+_EARLIER_YEARS_IN_SENTENCE = re.compile(
+    r"\d\s*\+?\s*(?:years?|yrs?)\b[^.\n]{0,100}$", re.IGNORECASE
+)
+
+
+def _is_sub_requirement(text: str, start: int) -> bool:
+    before = text[max(0, start - 130):start]
+    return bool(
+        _SUB_REQUIREMENT_LEAD.search(before) and _EARLIER_YEARS_IN_SENTENCE.search(before)
+    )
+
+
+def _years_of_engineering(text: str) -> list[float]:
+    """Requirement-shaped engineering years, leaving out sub-requirements."""
+    return [
+        float(next(group for group in m.groups() if group))
+        for m in _YEARS_OF_ENGINEERING_PATTERN.finditer(text)
+        if not _is_sub_requirement(text, m.start())
+    ]
+
 
 def required_experience_years(text: str) -> int | float | None:
     """The lowest years-of-experience bar in the text, or None if absent.
@@ -77,6 +143,9 @@ def required_experience_years(text: str) -> int | float | None:
     whose only stated bar is "5+ years of experience with React" means
     five years.
 
+    Postings that never say "experience" fall back to
+    _YEARS_OF_ENGINEERING_PATTERN.
+
     Whole-number bars come back as int so stored reasons read "5 years",
     not "5.0 years"; fractional bars ("1.5+ years") stay float.
     """
@@ -87,6 +156,9 @@ def required_experience_years(text: str) -> int | float | None:
         years.append(value)
         if not _TECH_SCOPED_PATTERN.match(text[m.end():]):
             general.append(value)
+    if not years:
+        # Fallback for postings that never use the word "experience".
+        years = _years_of_engineering(text)
     if not years:
         return None
     lowest = min(general) if general else min(years)
