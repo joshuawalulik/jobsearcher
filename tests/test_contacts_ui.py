@@ -469,6 +469,99 @@ def test_modal_checkbox_turns_the_watch_on_and_off(client, conn):
     assert db.get_contact(conn, contact_id)["standing_referral"] == 0
 
 
+# Removing
+
+
+def test_modal_has_a_remove_button_naming_the_person(client, conn):
+    contact_id = contact(conn, name="Pat O'Doe")
+    html = client.get(f"/contacts/{contact_id}/modal").text
+    assert f'hx-post="/contacts/{contact_id}/remove"' in html
+    assert "hx-confirm=\"Remove Pat O&#39;Doe? They'll disappear from every list" in html
+
+
+def test_remove_confirm_falls_back_to_the_company(client, conn):
+    contact_id = contact(conn, name=None)
+    html = client.get(f"/contacts/{contact_id}/modal").text
+    assert 'hx-confirm="Remove Acme?' in html
+
+
+def test_remove_hides_a_contact_and_refreshes_the_page(client, conn):
+    contact_id = contact(conn, status="Replied")
+    assert client.get("/contacts/due-count").text.strip() == "1"
+    response = client.post(f"/contacts/{contact_id}/remove")
+    assert response.status_code == 200
+    assert response.text == ""
+    assert response.headers["HX-Trigger"] == "contactsChanged"
+    assert "Pat Doe" not in client.get("/contacts").text
+    assert client.get("/contacts/due-count").text.strip() == ""
+    assert client.get(f"/contacts/{contact_id}/modal").status_code == 404
+
+
+def test_remove_is_soft_and_keeps_the_row_and_its_log(client, conn):
+    contact_id = contact(conn)
+    db.add_interaction(conn, contact_id, "2026-03-02", "email", "out", "Intro")
+    client.post(f"/contacts/{contact_id}/remove")
+    row = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+    assert row["removed_at"] is not None
+    assert row["name"] == "Pat Doe"
+    assert len(db.fetch_interactions(conn, contact_id)) == 1
+
+
+def test_remove_works_for_a_skipped_contact(client, conn):
+    contact_id = contact(conn, name="Sam Roe", priority="skip", status="Skip")
+    assert client.post(f"/contacts/{contact_id}/remove").status_code == 200
+    assert "Sam Roe" not in client.get("/contacts?tab=skipped").text
+
+
+def test_remove_works_for_do_not_contact(client, conn):
+    contact_id = blocked(conn)
+    assert "/remove" in client.get(f"/contacts/{contact_id}/modal").text
+    assert client.post(f"/contacts/{contact_id}/remove").status_code == 200
+    assert "Sam Blocked" not in client.get("/contacts?tab=skipped").text
+
+
+def test_remove_unknown_contact_is_404(client, conn):
+    assert client.post("/contacts/999/remove").status_code == 404
+
+
+def test_remove_twice_is_404_and_keeps_the_first_timestamp(client, conn):
+    contact_id = contact(conn)
+    client.post(f"/contacts/{contact_id}/remove")
+    conn.execute("UPDATE contacts SET removed_at = '2026-01-01' WHERE id = ?", (contact_id,))
+    conn.commit()
+    response = client.post(f"/contacts/{contact_id}/remove")
+    assert response.status_code == 404
+    assert "HX-Trigger" not in response.headers
+    row = conn.execute("SELECT removed_at FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+    assert row["removed_at"] == "2026-01-01"
+
+
+def test_removed_contact_cannot_be_edited_or_logged(client, conn):
+    contact_id = contact(conn)
+    client.post(f"/contacts/{contact_id}/remove")
+    assert client.post(f"/contacts/{contact_id}", data={"name": "X"}).status_code == 404
+    assert client.post(f"/contacts/{contact_id}/restore").status_code == 404
+
+
+def test_removed_contact_loses_its_job_badge(client, conn):
+    job(conn)
+    contact_id = contact(conn)
+    assert ">Contact</a>" in client.get("/").text
+    client.post(f"/contacts/{contact_id}/remove")
+    assert "contact-badge" not in client.get("/").text
+
+
+def test_email_can_be_added_again_after_removal(client, conn):
+    contact_id = contact(conn, email="pat@acme.example")
+    client.post(f"/contacts/{contact_id}/remove")
+    response = client.post("/contacts", data={
+        "name": "Pat Doe", "company": "Acme", "email": "pat@acme.example",
+        "track": "agency", "source": "linkedin",
+    })
+    assert response.headers.get("HX-Trigger") == "contactsChanged"
+    assert [c["email"] for c in db.fetch_contacts(conn)] == ["pat@acme.example"]
+
+
 # Badges
 
 

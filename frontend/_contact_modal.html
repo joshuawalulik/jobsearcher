@@ -121,5 +121,11 @@
         <button class="save" type="submit">Save</button>
       </form>
     </details>
+
+    <div class="contact-section">
+      <button class="dismiss" type="button" hx-post="/contacts/{{ c.contact_id }}/remove"
+              hx-target="#modal" hx-swap="innerHTML"
+              hx-confirm="Remove {{ c.name or c.company or 'this contact' }}? They'll disappear from every list, count and tool, and a re-import won't add them back.">Remove</button>
+    </div>
   </div>
 </div>

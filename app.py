@@ -689,6 +689,15 @@ def contact_restore(contact_id: int, conn=Depends(get_db)) -> Response:
     return Response(status_code=200, headers=_CONTACTS_CHANGED)
 
 
+@app.post("/contacts/{contact_id}/remove")
+def contact_remove(contact_id: int, conn=Depends(get_db)) -> Response:
+    """Soft removal, so it's allowed for Skip and do-not-contact people too:
+    taking someone off the list isn't contacting them."""
+    if not db.remove_contact(conn, contact_id):
+        raise HTTPException(status_code=404, detail=f"no contact with id {contact_id}")
+    return Response(status_code=200, headers=_CONTACTS_CHANGED)
+
+
 @app.post("/contacts", response_class=HTMLResponse)
 def contact_add(
     request: Request,
