@@ -95,6 +95,88 @@ def test_required_experience_years(text, years):
     assert required_experience_years(text) == years
 
 
+@pytest.mark.parametrize(
+    "text, years",
+    [
+        ("6+ years building and shipping web products", 6),
+        ("3+ years building production software at scale", 3),
+        ("5+ years of building reliable systems", 5),
+        ("Minimum 5 years of software development", 5),
+        ("minimum of 4 years building web apps", 4),
+        ("at least 3 years in software", 3),
+        ("2-4 years of professional software engineering", 2),
+        ("1–2+ years of professional software engineering", 1),
+        ("5+ years of hands-on software development", 5),
+        ("4+ years as a Software Engineer", 4),
+        ("6+ years working as a backend engineer", 6),
+        ("3+ years in a full-stack or frontend role", 3),
+        ("You have 1.5+ years writing production code", 1.5),
+    ],
+)
+def test_years_read_without_the_word_experience(text, years):
+    assert required_experience_years(text) == years
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You are at least 18 years of age",
+        "Paid sabbatical after 5 years of employment",
+        "Sabbatical for employees with 5+ years of service",
+        "For over 30 years we've been making games",
+        "You have 10 years to exercise your options",
+        "Before founding the company she spent 18 years at a search engine",
+        "Named a best workplace for 7+ years and recognized by the press",
+        "Founded 10 years ago building software",
+        "We have spent 10 years building the market leader",
+        "5+ years in sales",
+        "3+ years in marketing analytics",
+    ],
+)
+def test_years_about_something_else_are_not_requirements(text):
+    assert required_experience_years(text) is None
+
+
+@pytest.mark.parametrize(
+    "text, years",
+    [
+        ("5+ years building production software, with at least 1-2 years building LLM apps", 5),
+        ("8+ years in engineering with at least 3 years in an engineering leadership role", 8),
+        ("10+ years in software development with a minimum of 5+ years in engineering management", 10),
+        ("6+ years of software development, including 2+ years building APIs", 6),
+    ],
+)
+def test_sub_requirements_do_not_set_the_bar(text, years):
+    assert required_experience_years(text) == years
+
+
+@pytest.mark.parametrize(
+    "text, years",
+    [
+        ("A degree or equivalent practical experience, with 5+ years building software", 5),
+        ("We want someone with 3+ years in software", 3),
+        ("Someone with at least 4+ years writing production code", 4),
+    ],
+)
+def test_with_can_introduce_the_main_bar(text, years):
+    assert required_experience_years(text) == years
+
+
+def test_a_lone_sub_requirement_reads_as_nothing():
+    assert required_experience_years("10+ years in product, with 1+ years shipping models") is None
+
+
+def test_alternative_bars_still_take_the_lowest():
+    text = "3+ years working as a backend engineer here OR 5+ years working as a backend engineer"
+    assert required_experience_years(text) == 3
+
+
+def test_the_fallback_never_overrides_a_stated_bar():
+    assert required_experience_years(
+        "5+ years of experience required. 2+ years building APIs"
+    ) == 5
+
+
 def test_required_experience_years_integral_results_are_ints():
     result = required_experience_years("5+ years of experience")
     assert isinstance(result, int)  # stored reasons should read "5", not "5.0"
