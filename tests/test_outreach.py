@@ -5,6 +5,13 @@ import pytest
 import outreach
 
 CFG = {
+    "default_ask": "Who handles engineering hiring?",
+    "templates": {
+        "company_recruiter": {"subject": "Hello", "body": "Hi {first}, about {company}."},
+        "agency": {"subject": "Searches", "body": "Hi {first}, any searches?"},
+        "alumni": {"subject": "Fellow alum", "body": "Hi {first}, how is {company}?"},
+        "follow_up": {"subject": "", "body": "Hi {first}. {new_detail} Thanks!"},
+    },
     "follow_up": {"first_business_days": 5, "second_business_days": 12},
     "weekly_targets": {
         "agency_first_touches": 5,
@@ -42,6 +49,13 @@ def contact(**overrides):
         "last_reply": None,
         "next_step": None,
         "source": "peer_list",
+        "linkedin_url": None,
+        "kind_detail": None,
+        "priority": "C",
+        "ask": None,
+        "notes": None,
+        "verify_flag": None,
+        "gmail_draft_id": None,
         **overrides,
     }
 
@@ -232,7 +246,7 @@ def test_inbound_moves_earlier_statuses_to_replied(status):
     fields = outreach.apply_interaction(
         contact(status=status), "in", "2026-03-02", CFG
     )
-    assert fields == {"last_reply": "2026-03-02", "status": "Replied"}
+    assert fields == {"last_reply": "2026-03-02", "status": "Replied", "next_step": None}
 
 
 @pytest.mark.parametrize(
@@ -243,6 +257,35 @@ def test_inbound_keeps_later_statuses_and_skip(status):
         contact(status=status), "in", "2026-03-02", CFG
     )
     assert fields == {"last_reply": "2026-03-02"}
+
+
+def test_reply_with_a_stale_next_step_gets_flagged():
+    row = contact(status="Sent", date_contacted="2026-03-02", next_step="Send the draft")
+    fields = outreach.apply_interaction(row, "in", "2026-03-03", CFG)
+    assert outreach.attention_reason({**row, **fields}, "2026-03-03", CFG) == (
+        "Replied with no next step: respond within 24 hours"
+    )
+
+
+def test_marking_replied_keeps_a_new_next_step():
+    row = contact(status="Sent", date_contacted="2026-03-02", next_step="Old plan")
+    fields, _ = outreach.plan_update(
+        row, {"status": "Replied", "next_step": "Send resume"}, "2026-03-03", CFG
+    )
+    assert fields == {"status": "Replied", "next_step": "Send resume"}
+
+
+def test_marking_replied_without_a_next_step_clears_the_old_one():
+    row = contact(status="Sent", date_contacted="2026-03-02", next_step="Old plan")
+    fields, _ = outreach.plan_update(row, {"status": "Replied"}, "2026-03-03", CFG)
+    assert fields == {"status": "Replied", "next_step": None}
+
+
+def test_a_second_reply_keeps_the_current_next_step():
+    row = contact(status="Replied", last_reply="2026-03-02", next_step="Send resume")
+    assert outreach.apply_interaction(row, "in", "2026-03-03", CFG) == {
+        "last_reply": "2026-03-03",
+    }
 
 
 def test_backdated_inbound_keeps_the_newer_last_reply():
@@ -373,3 +416,352 @@ def test_weekly_summary_with_no_contacts():
     assert summary["by_status"] == {}
     assert summary["reply_rate"] == 0.0
     assert summary["follow_ups_due"] == 0
+
+
+# Summaries and filters
+
+
+def test_summary_leaves_out_peer_history_and_flags_action():
+    row = contact(status="Sent", date_contacted="2026-03-02", peer_history="Long text",
+                  gmail_draft_id="d1", source="own_pipeline")
+    summary = outreach.contact_summary(row, "2026-03-09", CFG)
+    assert "peer_history" not in summary
+    assert summary["contact_id"] == 1
+    assert summary["follow_up_due"] == "2026-03-09"
+    assert summary["needs_action"] == "First follow-up due 2026-03-09"
+    assert summary["referral_path"] is True
+    assert summary["has_gmail_draft"] is True
+    assert summary["do_not_contact"] is None
+
+
+def test_summary_marks_blocked_contacts():
+    row = contact(company="Umbrella", status="Skip")
+    summary = outreach.contact_summary(row, "2026-03-09", CFG)
+    assert summary["do_not_contact"] == "Do not contact: Former employer"
+
+
+def test_filter_hides_skip_unless_asked():
+    rows = [contact(id=1), contact(id=2, status="Skip", priority="skip")]
+    assert [c["id"] for c in outreach.filter_contacts(rows, CFG)] == [1]
+    skipped = outreach.filter_contacts(rows, CFG, status="Skip")
+    assert [c["id"] for c in skipped] == [2]
+
+
+def test_filter_sorts_by_priority_then_name():
+    rows = [
+        contact(id=1, name="Zed", priority="C"),
+        contact(id=2, name="Bea", priority="A"),
+        contact(id=3, name=None, priority=None),
+        contact(id=4, name="Amy", priority="A"),
+    ]
+    assert [c["id"] for c in outreach.filter_contacts(rows, CFG)] == [4, 2, 1, 3]
+
+
+def test_filter_by_track_priority_and_company():
+    rows = [
+        contact(id=1, company="Acme Corp", track="agency", priority="A"),
+        contact(id=2, company="Globex", track="agency", priority="B"),
+        contact(id=3, company="Vandelay Industries", priority="B"),
+    ]
+    ids = lambda **f: [c["id"] for c in outreach.filter_contacts(rows, CFG, **f)]
+    assert ids(track="agency") == [1, 2]
+    assert ids(priority="B") == [2, 3]
+    assert ids(company="ACME Holdings") == [1]
+    assert ids(company="vandelay") == [3]
+    assert ids(track="agency", priority="A") == [1]
+
+
+# Contacts for a job
+
+
+def test_contacts_for_company_groups_and_flags_a_real_path():
+    rows = [
+        contact(id=1, company="Acme", track="company_recruiter"),
+        contact(id=2, company="Acme Corp", track="referral", source="own_pipeline"),
+        contact(id=3, company="Globex"),
+    ]
+    result = outreach.contacts_for_company(rows, "Acme Corp", set(), "2026-03-02", CFG)
+    assert result["referral_path"] is True
+    assert result["referral_path_contacts"] == ["Pat Doe"]
+    assert set(result["contacts_by_track"]) == {"company_recruiter", "referral"}
+
+
+def test_reference_list_contact_alone_is_not_a_path():
+    rows = [contact(id=1, company="Acme", priority="A")]
+    result = outreach.contacts_for_company(rows, "Acme", set(), "2026-03-02", CFG)
+    assert result["referral_path"] is False
+    assert result["referral_path_contacts"] == []
+    assert len(result["contacts_by_track"]["company_recruiter"]) == 1
+
+
+def test_contacts_for_company_leaves_out_skip_and_cold():
+    rows = [
+        contact(id=1, company="Acme", status="Skip"),
+        contact(id=2, company="Acme", status="Cold", source="own_pipeline"),
+    ]
+    result = outreach.contacts_for_company(rows, "Acme", set(), "2026-03-02", CFG)
+    assert result["contacts_by_track"] == {}
+    assert result["referral_path"] is False
+
+
+def test_linked_contact_at_another_company_is_included():
+    rows = [contact(id=1, company="Example Staffing", track="agency",
+                    source="own_pipeline")]
+    result = outreach.contacts_for_company(rows, "Acme", {1}, "2026-03-02", CFG)
+    assert result["referral_path"] is True
+    assert len(result["contacts_by_track"]["agency"]) == 1
+
+
+def test_contacts_for_company_passes_on_a_double_up_warning():
+    result = outreach.contacts_for_company([], "Initrode", set(), "2026-03-02", CFG)
+    assert "already covered" in result["double_up_warning"]
+
+
+# Templates
+
+
+def test_company_recruiter_template_is_filled_in():
+    assert outreach.suggest_template(contact(name="Pat Q. Doe"), CFG) == {
+        "kind": "company_recruiter",
+        "subject": "Hello",
+        "body": "Hi Pat, about Acme Corp.",
+    }
+
+
+def test_agency_template():
+    row = contact(track="agency")
+    assert outreach.suggest_template(row, CFG)["kind"] == "agency"
+
+
+def test_alumni_first_touch_works_on_the_referral_track():
+    row = contact(track="referral", kind_detail="Fellow alum")
+    assert outreach.suggest_template(row, CFG)["kind"] == "alumni"
+
+
+def test_alumni_label_picks_the_alumni_template():
+    row = contact(kind_detail="State University alum")
+    assert outreach.suggest_template(row, CFG)["kind"] == "alumni"
+
+
+def test_contacted_person_gets_the_follow_up_with_detail_left_open():
+    result = outreach.suggest_template(contact(status="Sent"), CFG)
+    assert result["kind"] == "follow_up"
+    assert result["body"] == "Hi Pat. {new_detail} Thanks!"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"name": None},
+        {"status": "Skip"},
+        {"status": "Cold"},
+        {"status": "Replied"},
+        {"status": "Follow-up 2 sent"},
+        {"track": "referral"},
+        {"track": "platform"},
+        {"company": "Umbrella"},
+        {"track": "referral", "status": "Sent"},
+        {"track": "referral", "status": "Follow-up 1 sent"},
+        {"track": "platform", "status": "Sent"},
+    ],
+)
+def test_no_template_when_a_message_would_be_wrong(overrides):
+    assert outreach.suggest_template(contact(**overrides), CFG) is None
+
+
+# Updates
+
+
+def test_update_writes_plain_fields():
+    fields, warnings = outreach.plan_update(
+        contact(), {"next_step": " Call Monday ", "priority": "A"}, "2026-03-02", CFG
+    )
+    assert fields == {"next_step": "Call Monday", "priority": "A"}
+    assert warnings == []
+
+
+def test_update_rejects_fixed_and_unknown_fields():
+    for field in ("track", "source", "peer_history", "nonsense"):
+        with pytest.raises(ValueError, match="can't update"):
+            outreach.plan_update(contact(), {field: "x"}, "2026-03-02", CFG)
+
+
+def test_update_rejects_bad_values():
+    with pytest.raises(ValueError):
+        outreach.plan_update(contact(), {"priority": "Z"}, "2026-03-02", CFG)
+    with pytest.raises(ValueError):
+        outreach.plan_update(contact(), {"last_reply": "soon"}, "2026-03-02", CFG)
+    with pytest.raises(ValueError):
+        outreach.plan_update(contact(), {"status": "Ghosted"}, "2026-03-02", CFG)
+
+
+def test_update_notes_append():
+    row = contact(notes="Skip reason\n")
+    fields, _ = outreach.plan_update(row, {"notes": "New note"}, "2026-03-02", CFG)
+    assert fields == {"notes": "Skip reason\n\nNew note"}
+
+
+def test_blank_notes_never_erase_existing_notes():
+    fields, _ = outreach.plan_update(
+        contact(notes="Keep"), {"notes": "  "}, "2026-03-02", CFG
+    )
+    assert fields == {}
+
+
+def test_marking_sent_starts_the_clock():
+    fields, _ = outreach.plan_update(
+        contact(status="Drafted"), {"status": "Sent"}, "2026-03-02", CFG
+    )
+    assert fields == {"status": "Sent", "date_contacted": "2026-03-02"}
+
+
+def test_saving_a_draft_id_moves_not_started_to_drafted():
+    fields, _ = outreach.plan_update(
+        contact(), {"gmail_draft_id": "d1"}, "2026-03-02", CFG
+    )
+    assert fields == {"gmail_draft_id": "d1", "status": "Drafted"}
+
+
+def test_saving_a_draft_id_leaves_later_statuses_alone():
+    fields, _ = outreach.plan_update(
+        contact(status="Sent", date_contacted="2026-03-02"),
+        {"gmail_draft_id": "d1"}, "2026-03-03", CFG,
+    )
+    assert fields == {"gmail_draft_id": "d1"}
+
+
+@pytest.mark.parametrize("status", ["Drafted", "Sent"])
+def test_double_up_warns_when_drafting_or_sending(status):
+    row = contact(company="Initrode", status="Not started")
+    fields, warnings = outreach.plan_update(row, {"status": status}, "2026-03-02", CFG)
+    assert fields["status"] == status
+    assert warnings == ["Initrode is already covered by Pat Doe, Example Staffing"]
+
+
+def test_double_up_does_not_warn_on_unrelated_edits():
+    row = contact(company="Initrode")
+    _, warnings = outreach.plan_update(row, {"next_step": "x"}, "2026-03-02", CFG)
+    assert warnings == []
+
+
+def test_update_cannot_leave_skip():
+    with pytest.raises(ValueError, match="restore_contact"):
+        outreach.plan_update(
+            contact(status="Skip"), {"status": "Not started"}, "2026-03-02", CFG
+        )
+
+
+def test_blocked_contact_refuses_active_changes():
+    row = contact(company="Umbrella", status="Skip", priority="skip")
+    for changes in ({"status": "Sent"}, {"gmail_draft_id": "d1"}, {"priority": "A"}):
+        with pytest.raises(ValueError, match="Do not contact"):
+            outreach.plan_update(row, changes, "2026-03-02", CFG)
+
+
+def test_blocked_contact_can_still_take_notes():
+    row = contact(company="Umbrella", status="Skip", priority="skip")
+    fields, _ = outreach.plan_update(row, {"notes": "Saw them at an event"}, "2026-03-02", CFG)
+    assert fields == {"notes": "Saw them at an event"}
+
+
+def test_new_email_that_is_blocked_moves_the_contact_to_skip():
+    fields, warnings = outreach.plan_update(
+        contact(status="Drafted", gmail_draft_id="d1"),
+        {"email": "pat@umbrella.example"}, "2026-03-02", CFG,
+    )
+    assert fields["status"] == "Skip"
+    assert fields["priority"] == "skip"
+    assert fields["gmail_draft_id"] is None
+    assert "Moved to Skip" in warnings[0]
+
+
+# New contacts
+
+
+def test_new_contact_defaults():
+    new, warnings = outreach.plan_new_contact(
+        {"name": "Pat Doe", "company": "Acme", "track": "agency", "email": None},
+        [], CFG,
+    )
+    assert new == {"name": "Pat Doe", "company": "Acme", "track": "agency",
+                   "source": "research"}
+    assert warnings == []
+
+
+def test_firm_only_contact_is_allowed():
+    new, _ = outreach.plan_new_contact({"company": "Globex", "track": "agency"}, [], CFG)
+    assert new["company"] == "Globex"
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"track": "agency"},
+        {"name": "Pat Doe", "track": "nonsense"},
+        {"name": "Pat Doe"},
+        {"name": "Pat Doe", "track": "agency", "source": "nonsense"},
+    ],
+)
+def test_new_contact_rejects_bad_input(fields):
+    with pytest.raises(ValueError):
+        outreach.plan_new_contact(fields, [], CFG)
+
+
+def test_blocked_new_contact_is_saved_as_skip():
+    new, warnings = outreach.plan_new_contact(
+        {"name": "Pat Doe", "email": "pat@umbrella.example", "track": "agency"}, [], CFG
+    )
+    assert new["status"] == "Skip"
+    assert new["priority"] == "skip"
+    assert new["notes"] == "Do not contact: Former employer"
+    assert "Saved as Skip" in warnings[0]
+
+
+def test_new_contact_warns_on_a_double_up():
+    _, warnings = outreach.plan_new_contact(
+        {"name": "Sam Roe", "company": "Initrode", "track": "company_recruiter"}, [], CFG
+    )
+    assert "already covered" in warnings[0]
+
+
+def test_new_contact_warns_on_same_name_and_company():
+    existing = [contact(id=7, name="Pat Doe", company="Acme Corp")]
+    _, warnings = outreach.plan_new_contact(
+        {"name": "pat doe", "company": "Acme", "track": "agency"}, existing, CFG
+    )
+    assert warnings == ["Possible duplicate of contact 7: same name and company"]
+
+
+def test_find_duplicate_ignores_case():
+    existing = [contact(id=7, email="Pat@Acme.example")]
+    assert outreach.find_duplicate(" pat@acme.EXAMPLE ", existing)["id"] == 7
+    assert outreach.find_duplicate("sam@acme.example", existing) is None
+    assert outreach.find_duplicate(None, existing) is None
+
+
+# Restore
+
+
+def test_restore_sets_status_priority_and_ask():
+    row = contact(status="Skip", priority="skip", notes="Not a recruiter")
+    assert outreach.restore_fields(row, CFG) == {
+        "status": "Not started",
+        "priority": "C",
+        "ask": CFG["default_ask"],
+    }
+
+
+def test_restore_keeps_a_real_priority_and_existing_ask():
+    row = contact(status="Skip", priority="A", ask="Ask about teams")
+    assert outreach.restore_fields(row, CFG) == {"status": "Not started"}
+
+
+def test_restore_refuses_blocked_contacts():
+    row = contact(email="pat@umbrella.example", status="Skip", priority="skip")
+    with pytest.raises(ValueError, match="Do not contact"):
+        outreach.restore_fields(row, CFG)
+
+
+def test_restore_only_applies_to_skipped_contacts():
+    with pytest.raises(ValueError, match="Only skipped"):
+        outreach.restore_fields(contact(status="Sent"), CFG)

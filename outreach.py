@@ -26,10 +26,24 @@ _FIRST_CONTACT = ("Sent", "Follow-up 1 sent", "Follow-up 2 sent")
 _REPLIED = ("Replied", "Call scheduled", "Referred / submitted")
 _CONTACTED = (*_FIRST_CONTACT, *_REPLIED, "Cold")
 _INACTIVE = ("Skip", "Cold")
+# What update_contact may change. track and source are fixed at creation, and
+# peer_history is reference material, never edited.
+_EDITABLE = (
+    "name", "company", "email", "linkedin_url", "kind_detail", "priority",
+    "nyc_relevance", "ask", "status", "date_contacted", "last_reply",
+    "next_step", "notes", "verify_flag", "gmail_draft_id",
+)
+_DATE_FIELDS = ("date_contacted", "last_reply")
+_PRIORITY_ORDER = {"A": 0, "B": 1, "C": 2, None: 3, "skip": 4}
 
 
 def _to_date(value: str | date) -> date:
     return value if isinstance(value, date) else date.fromisoformat(value)
+
+
+def iso_date(value: str | date) -> str:
+    """Normalize a date. Raises ValueError for anything that isn't one."""
+    return _to_date(value).isoformat()
 
 
 def _strip_key(name: str, suffixes: list[str]) -> str:
@@ -152,21 +166,29 @@ def double_up_warning(company: str | None, cfg: Mapping) -> str | None:
 
 
 def status_change(
-    contact: Mapping, new_status: str, today: str | date, cfg: Mapping
+    contact: Mapping,
+    new_status: str,
+    today: str | date,
+    cfg: Mapping,
+    allow_blocked: bool = False,
 ) -> dict:
     """Fields to write for a status change. Raises ValueError if not allowed.
 
     Marking a contact sent stamps date_contacted, which starts the follow-up
-    clock. Blocked contacts can only ever be Skip.
+    clock. Moving to Replied clears next_step: the old plan no longer applies,
+    and an empty next step is what flags the reply for a response. Blocked
+    contacts can only ever be Skip.
     """
     if new_status not in db.CONTACT_STATUSES:
         raise ValueError(f"unknown status: {new_status}")
     reason = block_reason(contact["company"], contact["email"], cfg)
-    if reason and new_status != "Skip":
+    if reason and new_status != "Skip" and not allow_blocked:
         raise ValueError(reason)
     fields = {"status": new_status}
     if new_status in _FIRST_CONTACT and not contact["date_contacted"]:
         fields["date_contacted"] = _to_date(today).isoformat()
+    if new_status == "Replied" and contact["status"] != "Replied":
+        fields["next_step"] = None
     return fields
 
 
@@ -188,7 +210,7 @@ def apply_interaction(
         if not contact["last_reply"] or contact["last_reply"] < day:
             fields["last_reply"] = day
         if status in _PRE_REPLY or status == "Cold":
-            fields["status"] = "Replied"
+            fields.update(status_change(contact, "Replied", day, cfg, allow_blocked=True))
         return fields
     if direction != "out":
         raise ValueError(f"unknown direction: {direction}")
@@ -280,3 +302,257 @@ def weekly_summary(
             },
         },
     }
+
+
+def contact_summary(contact: Mapping, as_of: str | date, cfg: Mapping) -> dict:
+    """The short form of a contact. Leaves out peer_history and long text."""
+    due = follow_up_due(contact, cfg)
+    return {
+        "contact_id": contact["id"],
+        "name": contact["name"],
+        "company": contact["company"],
+        "email": contact["email"],
+        "linkedin_url": contact["linkedin_url"],
+        "track": contact["track"],
+        "priority": contact["priority"],
+        "status": contact["status"],
+        "date_contacted": contact["date_contacted"],
+        "last_reply": contact["last_reply"],
+        "next_step": contact["next_step"],
+        "follow_up_due": due.isoformat() if due else None,
+        "needs_action": attention_reason(contact, as_of, cfg),
+        "referral_path": has_referral_path(contact),
+        "do_not_contact": block_reason(contact["company"], contact["email"], cfg),
+        "verify_flag": contact["verify_flag"],
+        "has_gmail_draft": bool(contact["gmail_draft_id"]),
+    }
+
+
+def filter_contacts(
+    contacts: list[Mapping],
+    cfg: Mapping,
+    track: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    company: str | None = None,
+) -> list[Mapping]:
+    """Contacts matching every filter, best priority first.
+
+    Skip stays hidden unless status="Skip" asks for it. company matches any
+    part of a name, after aliases, so "Chase" and a partial name both work.
+    """
+    query = company_key(company, cfg)
+    rows = [
+        c for c in contacts
+        if (c["status"] == status if status else c["status"] != "Skip")
+        and (not track or c["track"] == track)
+        and (not priority or c["priority"] == priority)
+        and (not query or query in company_key(c["company"], cfg))
+    ]
+    return sorted(
+        rows,
+        key=lambda c: (_PRIORITY_ORDER[c["priority"]], (c["name"] or "").lower(), c["id"]),
+    )
+
+
+def contacts_for_company(
+    contacts: list[Mapping],
+    company: str | None,
+    linked_ids: set[int],
+    as_of: str | date,
+    cfg: Mapping,
+) -> dict:
+    """Active contacts for a company, grouped by track, with a referral flag.
+
+    Includes anyone explicitly linked to the application, such as an agency
+    recruiter who works at a different company. Skip and Cold are left out.
+    """
+    tracks: dict[str, list[dict]] = {}
+    for contact in contacts:
+        if contact["status"] in _INACTIVE:
+            continue
+        if contact["id"] in linked_ids or same_company(contact["company"], company, cfg):
+            summary = contact_summary(contact, as_of, cfg)
+            tracks.setdefault(contact["track"], []).append(summary)
+    paths = [
+        summary["name"] or summary["company"]
+        for rows in tracks.values()
+        for summary in rows
+        if summary["referral_path"]
+    ]
+    return {
+        "company": company,
+        "referral_path": bool(paths),
+        "referral_path_contacts": paths,
+        "contacts_by_track": tracks,
+        "double_up_warning": double_up_warning(company, cfg),
+    }
+
+
+def suggest_template(contact: Mapping, cfg: Mapping) -> dict | None:
+    """The message template that fits this contact, filled in, or None.
+
+    None for anyone who needs a personal message or no message at all: firm-only
+    rows, blocked or inactive contacts, people already in a conversation, and
+    referral relationships, apart from an alumni first touch.
+    Any {new_detail} placeholder is left for the writer to fill.
+    """
+    status = contact["status"]
+    if (
+        not contact["name"]
+        or status in _INACTIVE
+        or block_reason(contact["company"], contact["email"], cfg)
+    ):
+        return None
+    cold_track = {"agency": "agency", "company_recruiter": "company_recruiter"}.get(
+        contact["track"]
+    )
+    if status in ("Sent", "Follow-up 1 sent"):
+        kind = "follow_up" if cold_track else None
+    elif status not in ("Not started", "Drafted"):
+        kind = None
+    elif re.search(r"\balum", contact["kind_detail"] or "", re.IGNORECASE):
+        kind = "alumni"
+    else:
+        kind = cold_track
+    if kind is None:
+        return None
+    template = cfg["templates"][kind]
+
+    def fill(text: str) -> str:
+        first = contact["name"].split()[0]
+        return text.replace("{first}", first).replace(
+            "{company}", contact["company"] or ""
+        )
+
+    return {
+        "kind": kind,
+        "subject": fill(template["subject"]),
+        "body": fill(template["body"]),
+    }
+
+
+def _clean_value(field: str, value):
+    if isinstance(value, str):
+        value = value.strip() or None
+    if value is not None and field in _DATE_FIELDS:
+        value = _to_date(value).isoformat()
+    if value is not None and field == "priority" and value not in db.CONTACT_PRIORITIES:
+        raise ValueError(f"unknown priority: {value}")
+    return value
+
+
+def plan_update(
+    contact: Mapping, changes: Mapping, today: str | date, cfg: Mapping
+) -> tuple[dict, list[str]]:
+    """(fields to write, warnings) for an edit. Raises ValueError if not allowed.
+
+    notes always appends, so a skip reason can't be overwritten. Saving a draft
+    ID moves a Not started contact to Drafted. Leaving Skip has to go through
+    restore_fields, so a contact is never left half restored.
+    """
+    unknown = set(changes) - set(_EDITABLE)
+    if unknown:
+        raise ValueError(
+            f"can't update {sorted(unknown)}: editable fields are {list(_EDITABLE)}"
+        )
+    fields = {name: _clean_value(name, value) for name, value in changes.items()}
+    merged = {**contact, **fields}
+    reason = block_reason(merged["company"], merged["email"], cfg)
+    warnings = []
+
+    if reason and contact["status"] != "Skip":
+        # A new company or email just revealed this person is off limits.
+        fields.update(status="Skip", priority="skip", gmail_draft_id=None)
+        warnings.append(f"{reason}. Moved to Skip.")
+    elif reason and (
+        fields.get("gmail_draft_id")
+        or fields.get("status") not in (None, "Skip")
+        or fields.get("priority") not in (None, "skip")
+    ):
+        raise ValueError(reason)
+
+    status = fields.get("status")
+    if fields.get("gmail_draft_id") and not status and contact["status"] == "Not started":
+        status = "Drafted"
+    if status and status != contact["status"]:
+        if contact["status"] == "Skip":
+            raise ValueError("This contact is on Skip: use restore_contact")
+        # Explicit values win, so a reply logged with a new next step keeps it.
+        before = {**merged, "status": contact["status"]}
+        fields = {**status_change(before, status, today, cfg), **fields}
+        if status in ("Drafted", "Sent"):
+            warning = double_up_warning(merged["company"], cfg)
+            if warning:
+                warnings.append(warning)
+    if "notes" in fields:
+        if fields["notes"] is None:
+            del fields["notes"]
+        elif contact["notes"]:
+            fields["notes"] = f"{contact['notes'].rstrip()}\n\n{fields['notes']}"
+    return fields, warnings
+
+
+def plan_new_contact(
+    fields: Mapping, existing: list[Mapping], cfg: Mapping
+) -> tuple[dict, list[str]]:
+    """(fields to insert, warnings) for a new contact.
+
+    Raises ValueError for bad input. Someone on the do-not-contact list is
+    still saved, as Skip with the reason. Callers check for a duplicate email
+    first with find_duplicate.
+    """
+    new = {k: _clean_value(k, v) for k, v in fields.items() if v is not None}
+    if not new.get("name") and not new.get("company"):
+        raise ValueError("A contact needs a name or a company")
+    if new.get("track") not in db.CONTACT_TRACKS:
+        raise ValueError(f"track must be one of {list(db.CONTACT_TRACKS)}")
+    new.setdefault("source", "research")
+    if new["source"] not in db.CONTACT_SOURCES:
+        raise ValueError(f"source must be one of {list(db.CONTACT_SOURCES)}")
+    warnings = []
+    reason = block_reason(new.get("company"), new.get("email"), cfg)
+    if reason:
+        new.update(status="Skip", priority="skip", notes=reason)
+        warnings.append(f"{reason}. Saved as Skip.")
+    else:
+        warning = double_up_warning(new.get("company"), cfg)
+        if warning:
+            warnings.append(warning)
+    same_name = [
+        c for c in existing
+        if new.get("name")
+        and (c["name"] or "").lower() == new["name"].lower()
+        and same_company(c["company"], new.get("company"), cfg)
+    ]
+    if same_name:
+        warnings.append(
+            f"Possible duplicate of contact {same_name[0]['id']}: same name and company"
+        )
+    return new, warnings
+
+
+def find_duplicate(email: str | None, existing: list[Mapping]) -> Mapping | None:
+    """The contact already using this email, ignoring case."""
+    if not email or not email.strip():
+        return None
+    wanted = email.strip().lower()
+    return next((c for c in existing if (c["email"] or "").lower() == wanted), None)
+
+
+def restore_fields(contact: Mapping, cfg: Mapping) -> dict:
+    """Fields that bring a skipped contact back. Raises ValueError if blocked.
+
+    The notes are left alone, so the original skip reason stays visible.
+    """
+    reason = block_reason(contact["company"], contact["email"], cfg)
+    if reason:
+        raise ValueError(reason)
+    if contact["status"] != "Skip":
+        raise ValueError("Only skipped contacts can be restored")
+    fields = {"status": "Not started"}
+    if contact["priority"] == "skip":
+        fields["priority"] = "C"
+    if not contact["ask"]:
+        fields["ask"] = cfg["default_ask"]
+    return fields

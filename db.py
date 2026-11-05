@@ -199,6 +199,8 @@ CONTACT_STATUSES = (
     "Skip",
 )
 CONTACT_SOURCES = ("own_pipeline", "peer_list", "research", "linkedin")
+INTERACTION_CHANNELS = ("email", "linkedin", "call", "in_person")
+INTERACTION_DIRECTIONS = ("out", "in")
 # Everything insert_contact/update_contact may write.
 _CONTACT_FIELDS = (
     "name", "company", "email", "linkedin_url", "track", "kind_detail",
@@ -934,6 +936,14 @@ def link_contact_application(
         (contact_id, application_id, note),
     )
     conn.commit()
+
+
+def linked_contact_ids(conn: sqlite3.Connection, application_id: int) -> set[int]:
+    rows = conn.execute(
+        "SELECT contact_id FROM contact_applications WHERE application_id = ?",
+        (application_id,),
+    ).fetchall()
+    return {row["contact_id"] for row in rows}
 
 
 def table_names(conn: sqlite3.Connection) -> list[str]:
