@@ -8,3 +8,4 @@ ruamel.yaml
 mcp
 python-multipart
 python-docx
+openpyxl
