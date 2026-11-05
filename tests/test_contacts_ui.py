@@ -138,6 +138,42 @@ def test_location_saves_from_the_add_and_edit_forms(client, conn):
     assert db.get_contact(conn, row["id"])["location"] == "Remote"
 
 
+@pytest.fixture
+def conversations(tmp_path, monkeypatch):
+    folder = tmp_path / "conversations"
+    (folder / "leads").mkdir(parents=True)
+    monkeypatch.setattr(app_module, "CONVERSATIONS_DIR", folder)
+    return folder
+
+
+def test_a_conversation_path_in_notes_is_a_link(client, conn):
+    contact_id = contact(conn, notes="See data/conversations/leads/pat-doe.md for <more>")
+    html = client.get(f"/contacts/{contact_id}/modal").text
+    assert '<a href="/conversations/leads/pat-doe.md" target="_blank"' in html
+    assert "&lt;more&gt;" in html
+
+
+def test_conversation_page_shows_the_saved_text(client, conversations):
+    (conversations / "leads" / "pat-doe.md").write_text(
+        "# Pat Doe\n\n## 2026-03-02\n\n**Pat Doe, 9:00 AM**\n\n<b>hello</b>\n", encoding="utf-8"
+    )
+    html = client.get("/conversations/leads/pat-doe.md").text
+    assert "<h2>2026-03-02</h2>" in html
+    assert "<strong>Pat Doe, 9:00 AM</strong>" in html
+    assert "&lt;b&gt;hello&lt;/b&gt;" in html
+
+
+@pytest.mark.parametrize("name", ["missing.md", "secret.txt", "%2e%2e/outside.md"])
+def test_conversation_page_only_serves_saved_conversations(client, conversations, name):
+    (conversations / "secret.txt").write_text("no", encoding="utf-8")
+    (conversations.parent / "outside.md").write_text("no", encoding="utf-8")
+    assert client.get(f"/conversations/{name}").status_code == 404
+
+
+def test_reply_rate_label_says_who_it_counts(client, conn):
+    assert "of people you messaged first" in client.get("/contacts").text
+
+
 def test_empty_page_renders(client, conn):
     html = client.get("/contacts").text
     assert "No contacts match." in html

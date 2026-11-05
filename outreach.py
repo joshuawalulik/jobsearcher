@@ -280,11 +280,15 @@ def watch_reason(job: Mapping, cfg: Mapping, years_cfg: Mapping | None) -> str |
 
 
 def reply_rate(contacts: list[Mapping]) -> float:
-    """Replied or further, out of everyone contacted. 0.0 if nobody yet.
+    """Replied or further, out of people you messaged first. 0.0 if nobody yet.
 
-    Measures outreach, so mentors don't count either way.
+    Measures outreach, so mentors don't count either way, and neither does
+    anyone who reached out to you: only a first message of yours stamps
+    date_contacted, and an inbound pitch isn't a reply to anything.
     """
-    outreach_rows = [c for c in contacts if c["track"] != "mentor"]
+    outreach_rows = [
+        c for c in contacts if c["track"] != "mentor" and c["date_contacted"]
+    ]
     contacted = sum(1 for c in outreach_rows if c["status"] in _CONTACTED)
     if not contacted:
         return 0.0

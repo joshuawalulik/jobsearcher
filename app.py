@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 import analytics
 import db
@@ -58,6 +59,32 @@ async def revalidate_static(request: Request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 templates = Jinja2Templates(directory=FRONTEND_DIR)
+
+# Saved message history, git-ignored with the rest of data/.
+CONVERSATIONS_DIR = db.DB_PATH.parent / "conversations"
+_CONVERSATION_PATH = re.compile(r"data/conversations/([\w./-]+?\.md)")
+
+
+def link_conversations(text: str) -> Markup:
+    """Notes, escaped, with saved conversation paths turned into links."""
+    return Markup(
+        _CONVERSATION_PATH.sub(
+            lambda m: f'<a href="/conversations/{m[1]}" target="_blank" rel="noopener">{m[0]}</a>',
+            str(escape(text)),
+        )
+    )
+
+
+def render_conversation(text: str) -> Markup:
+    """A saved conversation, escaped, with its headings and speakers styled."""
+    html = str(escape(text))
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.M)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.M)
+    html = re.sub(r"^\*\*(.+?)\*\*", r"<strong>\1</strong>", html, flags=re.M)
+    return Markup(html)
+
+
+templates.env.filters["link_conversations"] = link_conversations
 
 
 def get_db():
@@ -631,6 +658,20 @@ def _render_contact_modal(request, conn, contact_id, cfg, *, warnings=(), error=
             "today": _today(),
         },
         headers=headers,
+    )
+
+
+@app.get("/conversations/{name:path}", response_class=HTMLResponse)
+def conversation_page(name: str, request: Request):
+    """One saved conversation. Only .md files under CONVERSATIONS_DIR."""
+    root = CONVERSATIONS_DIR.resolve()
+    path = (root / name).resolve()
+    if path.suffix != ".md" or not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(status_code=404, detail="no such conversation")
+    return templates.TemplateResponse(
+        request,
+        "conversation.html",
+        {"body": render_conversation(path.read_text(encoding="utf-8")), "title": path.stem},
     )
 
 
