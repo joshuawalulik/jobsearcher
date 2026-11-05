@@ -24,6 +24,7 @@
     <dl class="modal-details">
       <dt>Email</dt><dd>{{ c.email or '—' }}</dd>
       <dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">Open profile &nearr;</a>{% else %}—{% endif %}</dd>
+      <dt>Location</dt><dd>{{ c.location or '—' }}</dd>
       <dt>NYC</dt><dd>{{ c.nyc_relevance or '—' }}</dd>
       <dt>Ask</dt><dd>{{ c.ask or '—' }}</dd>
       <dt>Notes</dt><dd>{{ c.notes or '—' }}</dd>
@@ -107,6 +108,7 @@
           <label>Company <input type="text" name="company" value="{{ c.company or '' }}"></label>
           <label>Email <input type="email" name="email" value="{{ c.email or '' }}"></label>
           <label>LinkedIn URL <input type="url" name="linkedin_url" value="{{ c.linkedin_url or '' }}"></label>
+          <label>Location <input type="text" name="location" list="contact-locations" placeholder="NY, AZ, Remote" value="{{ c.location or '' }}"></label>
           <label>What they do <input type="text" name="kind_detail" value="{{ c.kind_detail or '' }}"></label>
           <label>Ask <input type="text" name="ask" value="{{ c.ask or '' }}"></label>
           <label>Next step <input type="text" name="next_step" value="{{ c.next_step or '' }}"></label>

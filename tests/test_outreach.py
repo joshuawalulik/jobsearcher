@@ -60,6 +60,7 @@ def contact(**overrides):
         "verify_flag": None,
         "gmail_draft_id": None,
         "standing_referral": 0,
+        "location": None,
         **overrides,
     }
 
@@ -802,11 +803,30 @@ def test_default_view_hides_c_but_keeps_unranked_people():
 
 @pytest.mark.parametrize(
     "filters",
-    [{"search": "Pat"}, {"priority": "C"}, {"status": "Not started"}],
+    [{"search": "Pat"}, {"priority": "C"}, {"status": "Not started"}, {"location": "az"}],
 )
 def test_looking_for_someone_finds_c_contacts(filters):
-    rows = [contact(id=1, priority="C")]
+    rows = [contact(id=1, priority="C", location="AZ")]
     assert len(outreach.visible_contacts(rows, CFG, **filters)) == 1
+
+
+def test_location_filter_ignores_case_and_skips_blanks():
+    rows = [contact(id=1, location="NY"), contact(id=2, location="AZ"), contact(id=3)]
+    found = outreach.filter_contacts(rows, CFG, location="ny")
+    assert [c["id"] for c in found] == [1]
+
+
+def test_contact_locations_lists_each_label_once_sorted():
+    rows = [contact(id=1, location="NY"), contact(id=2, location="AZ"),
+            contact(id=3, location="NY"), contact(id=4)]
+    assert outreach.contact_locations(rows) == ["AZ", "NY"]
+
+
+def test_location_shows_in_the_summary_and_can_be_edited():
+    row = contact(location="AZ")
+    assert outreach.contact_summary(row, "2026-01-05", CFG)["location"] == "AZ"
+    fields, _ = outreach.plan_update(row, {"location": " NY "}, "2026-01-05", CFG)
+    assert fields["location"] == "NY"
 
 
 def test_a_track_filter_alone_keeps_c_hidden():

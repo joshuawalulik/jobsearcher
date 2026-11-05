@@ -1,0 +1,18 @@
+{# Mail the sync filtered on purpose, with why, so a bad filter can be
+   spotted. Always renders the wrapper: /email/sync swaps it out-of-band. #}
+<div id="email-ignored"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if ignored_count %}
+  <details class="email-ignored">
+    <summary>Ignored mail ({{ ignored_count }})</summary>
+    <p class="hint">Filtered by the ignore rules in profile.yaml (email: section).
+    Most recent {{ ignored | length }} shown.</p>
+    <ul>
+      {% for r in ignored %}
+      <li>{{ (r.received_at or '')[:10] }} &middot; {{ r.subject or '(no subject)' }}
+        {%- if r.gmail_url %} &middot; <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
+        <span class="suggestion-mail">{{ r.sender }} &middot; {{ r.reason }}</span></li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</div>

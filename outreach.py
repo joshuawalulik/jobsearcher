@@ -34,6 +34,7 @@ _EDITABLE = (
     "name", "company", "email", "linkedin_url", "kind_detail", "priority",
     "nyc_relevance", "ask", "status", "date_contacted", "last_reply",
     "next_step", "notes", "verify_flag", "gmail_draft_id", "standing_referral",
+    "location",
 )
 _DATE_FIELDS = ("date_contacted", "last_reply")
 _PRIORITY_ORDER = {"A": 0, "B": 1, "C": 2, None: 3, "skip": 4}
@@ -360,6 +361,7 @@ def contact_summary(contact: Mapping, as_of: str | date, cfg: Mapping) -> dict:
         "contact_id": contact["id"],
         "name": contact["name"],
         "company": contact["company"],
+        "location": contact["location"],
         "email": contact["email"],
         "linkedin_url": contact["linkedin_url"],
         "track": contact["track"],
@@ -386,14 +388,16 @@ def filter_contacts(
     priority: str | None = None,
     company: str | None = None,
     search: str | None = None,
+    location: str | None = None,
 ) -> list[Mapping]:
     """Contacts matching every filter, best priority first.
 
     Skip stays hidden unless status="Skip" asks for it. company matches any
     part of a name, after aliases, so "Chase" and a partial name both work.
-    search also looks at names and emails.
+    search also looks at names and emails. location ignores case.
     """
     query = company_key(company, cfg)
+    place = (location or "").strip().lower()
     text = (search or "").strip().lower()
     text_key = company_key(search, cfg)
 
@@ -411,11 +415,17 @@ def filter_contacts(
         and (not priority or c["priority"] == priority)
         and (not query or query in company_key(c["company"], cfg))
         and (not text or found(c))
+        and (not place or (c["location"] or "").lower() == place)
     ]
     return sorted(
         rows,
         key=lambda c: (_PRIORITY_ORDER[c["priority"]], (c["name"] or "").lower(), c["id"]),
     )
+
+
+def contact_locations(contacts: list[Mapping]) -> list[str]:
+    """The location labels in use, for the filter and form suggestions."""
+    return sorted({c["location"] for c in contacts if c["location"]})
 
 
 def visible_contacts(
@@ -426,17 +436,19 @@ def visible_contacts(
     priority: str | None = None,
     search: str | None = None,
     show_c: bool = False,
+    location: str | None = None,
 ) -> list[Mapping]:
     """What the Contacts page lists. Priority C stays out of the default view.
 
     Unranked contacts always show, because the people you actually know have no
-    priority. Searching or filtering by status or priority finds C contacts too:
-    someone you look for by name should never come back empty.
+    priority. Searching or filtering by status, priority or location finds C
+    contacts too: someone you look for should never come back empty.
     """
     rows = filter_contacts(
-        contacts, cfg, track=track, status=status, priority=priority, search=search
+        contacts, cfg, track=track, status=status, priority=priority,
+        search=search, location=location,
     )
-    if show_c or search or status or priority:
+    if show_c or search or status or priority or location:
         return rows
     return [c for c in rows if c["priority"] != "C"]
 

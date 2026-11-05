@@ -28,11 +28,12 @@
       <p class="hint">Email replies</p>
       <ul>
         {% for r in a.suggestions %}
-        <li><span class="pending-pill">pending</span>
+        <li><span class="pending-pill">pending</span> <span class="kind-pill">{{ r.kind_label }}</span>
           {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
           {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
-          <span class="suggestion-mail">{{ r.from_addr or '?' }} · {{ r.reason }}
+          <span class="suggestion-mail">{{ r.sender }} · {{ r.reason }}
             {%- if r.suggested_lane %} &rarr; suggests {{ r.suggested_lane }}{% endif %}</span>
+          {% if r.evidence %}<br><q class="email-evidence">{{ r.evidence }}</q>{% endif %}
           {% if r.body %}
           <details class="email-body">
             <summary>Full email</summary>
@@ -41,10 +42,11 @@
           {% endif %}</li>
         {% endfor %}
         {% for r in a.email_replies %}
-        <li>{{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
+        <li><span class="kind-pill">{{ r.kind_label }}</span> {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
           {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
-          <span class="suggestion-mail">{{ r.from_addr or '?' }} · {{ r.reason }}
+          <span class="suggestion-mail">{{ r.sender }} · {{ r.reason }}
             {%- if r.suggested_lane %} &rarr; moved to {{ r.suggested_lane }}{% endif %}</span>
+          {% if r.evidence %}<br><q class="email-evidence">{{ r.evidence }}</q>{% endif %}
           {% if r.body %}
           <details class="email-body">
             <summary>Full email</summary>

@@ -16,7 +16,8 @@ def conn(tmp_path):
 def test_schema_creates_all_tables(conn):
     assert db.table_names(conn) == [
         "applications", "companies", "contact_applications", "contacts",
-        "email_suggestions", "events", "interactions", "jobs", "sweep_runs",
+        "email_ignored", "email_suggestions", "events", "interactions", "jobs",
+        "sweep_runs",
     ]
 
 
@@ -24,7 +25,8 @@ def test_init_db_is_idempotent(conn):
     db.init_db(conn)
     assert db.table_names(conn) == [
         "applications", "companies", "contact_applications", "contacts",
-        "email_suggestions", "events", "interactions", "jobs", "sweep_runs",
+        "email_ignored", "email_suggestions", "events", "interactions", "jobs",
+        "sweep_runs",
     ]
 
 
@@ -278,6 +280,15 @@ def test_contacts_migration_adds_the_standing_referral_flag(old_contacts_db):
     assert db.get_contact(old_contacts_db, 7)["standing_referral"] == 0
 
 
+def test_location_is_added_to_an_existing_contacts_table(conn):
+    conn.execute("ALTER TABLE contacts DROP COLUMN location")
+    contact_id = _contact(conn)
+    db.init_db(conn)
+    assert db.get_contact(conn, contact_id)["location"] is None
+    db.update_contact(conn, contact_id, location="NY")
+    assert db.get_contact(conn, contact_id)["location"] == "NY"
+
+
 def test_flag_is_added_to_a_table_that_already_has_the_mentor_track(conn):
     conn.execute("ALTER TABLE contacts DROP COLUMN standing_referral")
     contact_id = _contact(conn)
@@ -293,3 +304,45 @@ def test_contacts_migration_runs_once(old_contacts_db):
     db.remove_contact(conn, 7)
     db.init_db(conn)
     assert db.get_contact(conn, 7) is None
+
+
+def test_old_email_suggestions_table_gains_the_new_columns(tmp_path):
+    # A database from before the sender/kind/evidence columns and the
+    # ignored-mail table: existing rows stay and read as NULL.
+    conn = db.get_connection(tmp_path / "old.db")
+    db.init_db(conn)
+    conn.execute("DROP TABLE email_ignored")
+    for col in ("from_name", "kind", "evidence"):
+        conn.execute(f"ALTER TABLE email_suggestions DROP COLUMN {col}")
+    conn.execute("INSERT INTO companies (id, name, ats_type, slug) VALUES (1, 'Acme', 'greenhouse', 'a')")
+    conn.execute("INSERT INTO jobs (id, company_id, external_id, title) VALUES (1, 1, 'j', 'Engineer')")
+    app_id = db.create_application(conn, 1)
+    conn.execute(
+        "INSERT INTO email_suggestions (application_id, msg_uid, reason) VALUES (?, '5', 'old')",
+        (app_id,),
+    )
+    conn.commit()
+
+    db.init_db(conn)
+
+    row = db.get_email_suggestion(conn, 1)
+    assert row["reason"] == "old"
+    assert row["kind"] is None and row["evidence"] is None and row["from_name"] is None
+    assert db.count_ignored_emails(conn) == 0
+    assert db.known_email_uids(conn) == {"5"}
+    conn.close()
+
+
+def test_known_email_uids_covers_suggestions_and_ignored(conn):
+    conn.execute("INSERT INTO companies (id, name, ats_type, slug) VALUES (1, 'Acme', 'greenhouse', 'a')")
+    conn.execute("INSERT INTO jobs (id, company_id, external_id, title) VALUES (1, 1, 'j', 'Engineer')")
+    app_id = db.create_application(conn, 1)
+    db.add_email_suggestion(
+        conn, application_id=app_id, msg_uid="1", from_addr=None, subject=None,
+        received_at=None, suggested_lane=None, reason="r",
+    )
+    kept = dict(company="Acme", from_name=None, from_addr=None, subject=None,
+                received_at=None, message_id=None, reason="r")
+    assert db.add_ignored_email(conn, msg_uid="2", **kept) is True
+    assert db.add_ignored_email(conn, msg_uid="2", **kept) is False
+    assert db.known_email_uids(conn) == {"1", "2"}
