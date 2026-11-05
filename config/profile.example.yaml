@@ -150,6 +150,65 @@ workflow:              # local application workflow (/apply + apply_run)
   # Folder that holds per-company application folders under Applications/.
   home: /Users/you/Documents/JobSearch
 
+outreach:             # recruiter and referral contacts (data/jobs.db contacts table)
+  follow_up:
+    # Weekdays after the first message, both counted from date_contacted.
+    first_business_days: 5
+    second_business_days: 12
+  weekly_targets:       # shown as progress, never enforced
+    agency_first_touches: 5
+    company_recruiter_emails_min: 5
+    company_recruiter_emails_max: 8
+    referral_touches: 1
+  default_ask: Who handles experienced engineering hiring here?
+  company_suffixes: [Inc, LLC, Group, Financial Group]
+  # First item in each list is the canonical name.
+  company_aliases:
+    - [Acme Corp, Acme]
+  # Warn before cold outreach to a company an active process already covers.
+  dont_double_up:
+    - company: Globex
+      covered_by: Pat Doe, Example Staffing
+  # Stay on file for reference, always Skip, never drafted or suggested.
+  do_not_contact:
+    - company: Initech
+      email_domains: [initech.example]
+      reason: replace with your own reason
+  templates:
+    company_recruiter:
+      subject: Software engineer exploring new roles
+      body: |
+        Hi {first},
+
+        I came across your name while looking into {company}'s engineering teams. If engineering hiring sits with someone else, I'd really appreciate a pointer to the right person.
+
+        Thanks,
+        Alex J. Candidate
+    agency:
+      subject: Full-stack engineer exploring new roles
+      body: |
+        Hi {first},
+
+        If you're working any software engineering searches, I'd love to connect.
+
+        Thanks,
+        Alex
+    alumni:
+      subject: Fellow alum
+      body: |
+        Hi {first},
+
+        I saw you're at {company} and would love to hear what it's been like there.
+
+        Best,
+        Alex
+    linkedin_note:
+      subject: ""
+      body: Hi {first}, are you working any software engineering searches? Would love to connect.
+    follow_up:
+      subject: ""
+      body: Hi {first}, just bumping this in case it got buried. {new_detail} Thanks again!
+
 scraper:
   delay_seconds: 1      # polite gap between companies on a sweep
   timeout_seconds: 10

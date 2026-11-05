@@ -104,6 +104,64 @@ CREATE TABLE IF NOT EXISTS sweep_runs (
     rescore_passed   INTEGER,
     rescore_rejected INTEGER
 );
+
+-- Outreach CRM: recruiter and referral contacts. name and company are
+-- nullable for firm-only rows; follow-up dates are computed by outreach.py,
+-- never stored. peer_history is someone else's experience with the contact,
+-- kept as reference and never counted as the user's own activity.
+CREATE TABLE IF NOT EXISTS contacts (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT,
+    company         TEXT,
+    email           TEXT,
+    linkedin_url    TEXT,
+    track           TEXT NOT NULL CHECK (track IN
+                    ('agency', 'company_recruiter', 'referral', 'platform')),
+    kind_detail     TEXT,
+    priority        TEXT CHECK (priority IS NULL OR priority IN
+                    ('A', 'B', 'C', 'skip')),
+    nyc_relevance   TEXT,
+    ask             TEXT,
+    status          TEXT NOT NULL DEFAULT 'Not started' CHECK (status IN
+                    ('Not started', 'Drafted', 'Sent', 'Follow-up 1 sent',
+                     'Follow-up 2 sent', 'Replied', 'Call scheduled',
+                     'Referred / submitted', 'Cold', 'Skip')),
+    date_contacted  TEXT,
+    last_reply      TEXT,
+    next_step       TEXT,
+    notes           TEXT,
+    source          TEXT NOT NULL CHECK (source IN
+                    ('own_pipeline', 'peer_list', 'research', 'linkedin')),
+    peer_history    TEXT,
+    verify_flag     TEXT,
+    gmail_draft_id  TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS contacts_email_unique
+    ON contacts (lower(email)) WHERE email IS NOT NULL;
+
+-- Append-only outreach log.
+CREATE TABLE IF NOT EXISTS interactions (
+    id          INTEGER PRIMARY KEY,
+    contact_id  INTEGER NOT NULL REFERENCES contacts(id),
+    date        TEXT NOT NULL,
+    channel     TEXT NOT NULL CHECK (channel IN
+                ('email', 'linkedin', 'call', 'in_person')),
+    direction   TEXT NOT NULL CHECK (direction IN ('out', 'in')),
+    summary     TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Explicit link for when a recruiter submits the user to a specific req.
+CREATE TABLE IF NOT EXISTS contact_applications (
+    contact_id      INTEGER NOT NULL REFERENCES contacts(id),
+    application_id  INTEGER NOT NULL REFERENCES applications(id),
+    note            TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (contact_id, application_id)
+);
 """
 
 
@@ -122,6 +180,31 @@ LANES = (
     # workflow's Stage 2 hiring screen. Last so the active pipeline
     # stays left on the board.
     "skipped",
+)
+
+
+# Outreach enums. Must match the contacts CHECK constraints above.
+CONTACT_TRACKS = ("agency", "company_recruiter", "referral", "platform")
+CONTACT_PRIORITIES = ("A", "B", "C", "skip")
+CONTACT_STATUSES = (
+    "Not started",
+    "Drafted",
+    "Sent",
+    "Follow-up 1 sent",
+    "Follow-up 2 sent",
+    "Replied",
+    "Call scheduled",
+    "Referred / submitted",
+    "Cold",
+    "Skip",
+)
+CONTACT_SOURCES = ("own_pipeline", "peer_list", "research", "linkedin")
+# Everything insert_contact/update_contact may write.
+_CONTACT_FIELDS = (
+    "name", "company", "email", "linkedin_url", "track", "kind_detail",
+    "priority", "nyc_relevance", "ask", "status", "date_contacted",
+    "last_reply", "next_step", "notes", "source", "peer_history",
+    "verify_flag", "gmail_draft_id",
 )
 
 
@@ -757,6 +840,100 @@ def last_sweep_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM sweep_runs ORDER BY id DESC LIMIT 1"
     ).fetchone()
+
+
+def insert_contact(conn: sqlite3.Connection, **fields) -> int:
+    """Insert a contact and return its id. Unknown fields are a bug: raises."""
+    unknown = set(fields) - set(_CONTACT_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown contact fields: {sorted(unknown)}")
+    columns = ", ".join(fields)
+    marks = ", ".join("?" for _ in fields)
+    cur = conn.execute(
+        f"INSERT INTO contacts ({columns}) VALUES ({marks})",
+        tuple(fields.values()),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_contact(conn: sqlite3.Connection, contact_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM contacts WHERE id = ?", (contact_id,)
+    ).fetchone()
+
+
+def fetch_contacts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM contacts ORDER BY id").fetchall()
+
+
+def update_contact(conn: sqlite3.Connection, contact_id: int, **fields) -> bool:
+    """Write the given fields. Returns False if no such contact."""
+    unknown = set(fields) - set(_CONTACT_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown contact fields: {sorted(unknown)}")
+    if not fields:
+        return get_contact(conn, contact_id) is not None
+    assignments = ", ".join(f"{name} = ?" for name in fields)
+    cur = conn.execute(
+        f"UPDATE contacts SET {assignments}, updated_at = datetime('now') "
+        "WHERE id = ?",
+        (*fields.values(), contact_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def add_interaction(
+    conn: sqlite3.Connection,
+    contact_id: int,
+    date: str,
+    channel: str,
+    direction: str,
+    summary: str,
+) -> int:
+    """Append to the interaction log. Status changes live in outreach.py."""
+    cur = conn.execute(
+        """
+        INSERT INTO interactions (contact_id, date, channel, direction, summary)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (contact_id, date, channel, direction, summary),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def fetch_interactions(
+    conn: sqlite3.Connection, contact_id: int | None = None
+) -> list[sqlite3.Row]:
+    """One contact's log, or every interaction when contact_id is None."""
+    if contact_id is None:
+        return conn.execute(
+            "SELECT * FROM interactions ORDER BY date, id"
+        ).fetchall()
+    return conn.execute(
+        "SELECT * FROM interactions WHERE contact_id = ? ORDER BY date, id",
+        (contact_id,),
+    ).fetchall()
+
+
+def link_contact_application(
+    conn: sqlite3.Connection,
+    contact_id: int,
+    application_id: int,
+    note: str | None = None,
+) -> None:
+    """Tie a contact to a specific application. Re-linking updates the note."""
+    conn.execute(
+        """
+        INSERT INTO contact_applications (contact_id, application_id, note)
+        VALUES (?, ?, ?)
+        ON CONFLICT (contact_id, application_id) DO UPDATE SET note = excluded.note
+        """,
+        (contact_id, application_id, note),
+    )
+    conn.commit()
 
 
 def table_names(conn: sqlite3.Connection) -> list[str]:

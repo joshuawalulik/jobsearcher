@@ -14,12 +14,18 @@ def conn(tmp_path):
 
 
 def test_schema_creates_all_tables(conn):
-    assert db.table_names(conn) == ["applications", "companies", "email_suggestions", "events", "jobs", "sweep_runs"]
+    assert db.table_names(conn) == [
+        "applications", "companies", "contact_applications", "contacts",
+        "email_suggestions", "events", "interactions", "jobs", "sweep_runs",
+    ]
 
 
 def test_init_db_is_idempotent(conn):
     db.init_db(conn)
-    assert db.table_names(conn) == ["applications", "companies", "email_suggestions", "events", "jobs", "sweep_runs"]
+    assert db.table_names(conn) == [
+        "applications", "companies", "contact_applications", "contacts",
+        "email_suggestions", "events", "interactions", "jobs", "sweep_runs",
+    ]
 
 
 def test_job_dedupe_key(conn):
@@ -92,3 +98,84 @@ def test_applications_check_migration_to_ready_lanes(tmp_path):
         conn.execute("UPDATE applications SET lane = 'ghosted' WHERE id = 7")
     conn.commit()
     conn.close()
+
+
+def _contact(conn, **overrides):
+    fields = {"name": "Pat Doe", "company": "Acme Corp", "track": "agency",
+              "source": "research", **overrides}
+    return db.insert_contact(conn, **fields)
+
+
+def test_contact_round_trip_allows_firm_only_rows(conn):
+    contact_id = _contact(conn, name=None, company="Globex")
+    row = db.get_contact(conn, contact_id)
+    assert row["name"] is None
+    assert row["company"] == "Globex"
+    assert row["status"] == "Not started"
+
+
+def test_contact_email_is_unique_ignoring_case(conn):
+    _contact(conn, email="Pat@Example.com")
+    with pytest.raises(sqlite3.IntegrityError):
+        _contact(conn, email="pat@example.com")
+
+
+def test_contacts_without_email_do_not_collide(conn):
+    _contact(conn, name="Pat Doe")
+    _contact(conn, name="Sam Roe")
+    assert len(db.fetch_contacts(conn)) == 2
+
+
+def test_contact_enums_match_the_schema(conn):
+    for status in db.CONTACT_STATUSES:
+        _contact(conn, status=status)
+    for track in db.CONTACT_TRACKS:
+        _contact(conn, track=track)
+    for priority in db.CONTACT_PRIORITIES:
+        _contact(conn, priority=priority)
+    for source in db.CONTACT_SOURCES:
+        _contact(conn, source=source)
+    with pytest.raises(sqlite3.IntegrityError):
+        _contact(conn, status="Ghosted")
+
+
+def test_contact_writes_reject_unknown_fields(conn):
+    contact_id = _contact(conn)
+    with pytest.raises(ValueError):
+        db.update_contact(conn, contact_id, nonsense="x")
+    with pytest.raises(ValueError):
+        db.insert_contact(conn, track="agency", source="research", nonsense="x")
+
+
+def test_update_contact_reports_missing_row(conn):
+    assert db.update_contact(conn, 999, notes="x") is False
+    contact_id = _contact(conn)
+    assert db.update_contact(conn, contact_id, notes="x") is True
+    assert db.get_contact(conn, contact_id)["notes"] == "x"
+
+
+def test_interactions_list_in_date_order(conn):
+    contact_id = _contact(conn)
+    other = _contact(conn, name="Sam Roe")
+    db.add_interaction(conn, contact_id, "2026-03-05", "email", "in", "Reply")
+    db.add_interaction(conn, contact_id, "2026-03-02", "email", "out", "First")
+    db.add_interaction(conn, other, "2026-03-03", "call", "out", "Call")
+    assert [r["summary"] for r in db.fetch_interactions(conn, contact_id)] == [
+        "First", "Reply",
+    ]
+    assert len(db.fetch_interactions(conn)) == 3
+
+
+def test_link_contact_application_updates_note(conn):
+    contact_id = _contact(conn)
+    conn.execute(
+        "INSERT INTO companies (name, ats_type, slug) VALUES ('Acme', 'greenhouse', 'acme')"
+    )
+    job_id = conn.execute(
+        "INSERT INTO jobs (company_id, external_id, title) VALUES (1, 'x', 'Engineer')"
+    ).lastrowid
+    app_id = db.create_application(conn, job_id)
+    db.link_contact_application(conn, contact_id, app_id, "first")
+    db.link_contact_application(conn, contact_id, app_id, "second")
+    rows = conn.execute("SELECT note FROM contact_applications").fetchall()
+    assert [r["note"] for r in rows] == ["second"]
