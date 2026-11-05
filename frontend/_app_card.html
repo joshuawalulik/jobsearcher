@@ -13,10 +13,11 @@
   {% endif %}
   {% for s in a.suggestions or [] %}
   <div class="email-suggestion">
-    <p>&#9993;
+    <p>&#9993; <span class="kind-pill">{{ s.kind_label }}</span>
       {% if s.suggested_lane %}suggests <strong>{{ s.suggested_lane | capitalize }}</strong> &middot; {% endif %}
       {{ s.reason }}<br>
-      <span class="suggestion-mail">{{ s.subject or '(no subject)' }}{% if s.received_at %} · {{ s.received_at[:10] }}{% endif %}
+      {% if s.evidence %}<q class="email-evidence">{{ s.evidence }}</q><br>{% endif %}
+      <span class="suggestion-mail">{{ s.sender }} · {{ s.subject or '(no subject)' }}{% if s.received_at %} · {{ s.received_at[:10] }}{% endif %}
         {%- if s.gmail_url %} · <a href="{{ s.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}</span>
     </p>
     {% if s.body %}
@@ -57,7 +58,7 @@
       <p class="hint">Email replies</p>
       <ul>
         {% for r in a.email_replies %}
-        <li>{{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
+        <li><span class="kind-pill">{{ r.kind_label }}</span> {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
           {%- if r.suggested_lane %} <span class="suggestion-mail">&rarr; {{ r.suggested_lane }}</span>{% endif %}
           {%- if r.gmail_url %} <a href="{{ r.gmail_url }}" target="_blank" rel="noopener" title="Open in Gmail">&nearr;</a>{% endif %}</li>
         {% endfor %}

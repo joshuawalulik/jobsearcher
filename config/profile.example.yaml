@@ -239,53 +239,140 @@ email:                # inbox → tracker suggestions (creds in git-ignored conf
   # Only these lanes are matched against the inbox (considering/ready =
   # not applied yet; rejected/skipped are already terminal).
   sync_lanes: [applied, interviewing, offer]
-  # Every bucket is scored (each body phrase hit = 1, each subject hit =
-  # subject_weight) after quoted reply/forward history is stripped; the
-  # highest-scoring bucket wins and ties keep this top-to-bottom order —
-  # rejected first, so a pure "after your interview, unfortunately…"
-  # still reads as a rejection, while a scheduling email with one stray
-  # "unfortunately" no longer does. Case-insensitive substring match.
+  # Mail older than an application by more than this can't be about it
+  # (the grace covers jobs tracked a few days after applying).
+  application_grace_days: 3
+  # Filtered before anything else; matched against the From address.
+  # Filtered mail stays listed on the tracker with its reason.
+  ignore_senders:
+    - tldrnewsletter.com
+    - newsletters-noreply@linkedin.com
+  # Account and security mail. Only filters when no lane bucket decided,
+  # so an assessment invite that mentions a passcode still gets through.
+  ignore_phrases:
+    - verification code
+    - one[- ]time pass(code|word)
+    - security code
+    - (sign[- ]in|login|access) code
+    - confirm your (identity|email)
+    - verify your (identity|email|account|login)
+    - code required
+    - reset your password
+    - password reset
+    - activate your account
+    - your account has been created
+    - new sign[- ]in
+    - security alert
+  # A sender counts as a person unless its address part matches one of
+  # these (regex) or its domain is listed. Person mail always surfaces,
+  # with no phrase needed, so a role mailbox missing here shows up as a
+  # false "Person" card: add it.
+  automated_senders:
+    - no-?reply
+    - do-?not-?reply
+    - autoreply
+    - careers?
+    - ^jobs?$
+    - recruit(ing|ment)
+    - talent
+    - ^hr$
+    - ^(hello|hi|info|team|news|newsletter|updates?|support|help|contact)$
+    - notifications?
+    - ^(billing|receipts?|orders?|invoices?|payments?|accounts?|security|alerts?)$
+    - mailer
+    - sender
+    - "[0-9a-f]{16,}"     # opaque hash addresses, sent by a system
+  automated_domains:
+    - myworkday.com
+    - icims.com
+    - clinchtalent.com
+  # Every bucket is scored after quoted reply/forward history is
+  # stripped: a phrase counts strong_weight (strong) or 1 (weak), once in
+  # the body and subject_weight times in the subject. A bucket needs
+  # min_score to decide, so one weak phrase alone never does, and it
+  # needs to beat the others; ties keep this top-to-bottom order, rejected
+  # first, so a pure "after your interview, unfortunately…" still reads
+  # as a rejection. Entries are case-insensitive regexes matched on whole
+  # words; plain phrases work as they are.
   subject_weight: 2
+  strong_weight: 2
+  min_score: 2
   classify:
     rejected:
-      - not moving forward
-      - moving forward with other candidates
-      - pursue other candidates
-      - will not be proceeding
-      - unable to extend an offer
-      - position has been filled
-      - no longer under consideration
-      - regret to inform
-      - not been selected
-      - other qualified candidates
-      - best of luck in your search
-      - unfortunately
+      strong:
+        - not (to |be )?mov(e|ing) forward
+        - not (to |be )?(advanc|progress|continu)(e|ing)
+        - mov(e|ing) forward with other
+        - pursu(e|ing) (other )?candidates
+        - will not be proceeding
+        - not to proceed
+        - unable to extend an offer
+        - decided to pursue
+        - position has been filled
+        - no longer (available|under consideration)
+        - hired someone
+        - different direction
+        - regret to inform
+        - not been selected
+        - other qualified candidates
+      weak:
+        - unfortunately
+        - best of luck in your (job )?search
+        - keep your (information|resume) on file
+        - at this time
     offer:
-      - pleased to extend
-      - pleased to offer
-      - offer letter
-      - formal offer
-      - extend an offer
-      - offer of employment
+      strong:
+        - pleased to extend
+        - pleased to offer
+        - offer letter
+        - formal offer
+        - extend an offer
+        - offer of employment
+    # Recruiter-screen phrases folded in since the screening lane was
+    # retired — a phone-screen email now suggests Interviewing.
     interviewing:
-      - technical interview
-      - interview with the team
-      - onsite
-      - coding challenge
-      - take-home
-      - schedule your interview
-      - hiring manager
-      - invite you to interview
-      - next round
-      - technical assessment
-      - video interview
-      - phone screen
-      - recruiter screen
-      - initial call
-      - schedule a call
-      - your availability
-      - introductory call
-  # Mail matching none of the buckets still surfaces as a plain "reply
+      strong:
+        - technical interview
+        - interview with the team
+        - coding challenge
+        - take-home
+        - schedule (your|an) interview
+        - invite you to interview
+        - next round
+        - technical assessment
+        - video interview
+        - phone screen
+        - recruiter screen
+        - initial call
+        - schedule a call
+        - your availability
+        - chat about your application
+        - introductory call
+        - (would|we'd|i'd) (like|love) to (speak|talk|chat|connect|schedule|interview)
+      weak:
+        - onsite
+        - hiring manager
+        - get to know you
+        - schedule
+        - availability
+        - calendly
+  # An automated "we got it" with no lane signal and nothing else in it
+  # is filed straight into reply history: no card, no lane move. Matched
+  # in the body only, and forward-looking on purpose: rejections thank
+  # you for applying too, and say "after reviewing your application", so
+  # those words must not be enough to file a mail unseen. Anything these
+  # miss just stays a normal Save reply card.
+  receipt_phrases:
+    - (received|got) your application
+    - application (has been|was) received
+    - receipt of your application
+    - application landed
+    - (are|is|be|process of) (carefully )?reviewing
+    - will (review|be reviewing)
+    - review (it|your application|what you|each candidate|each application)
+    - (reach out|contact you|be in touch)
+    - (will|expect to) hear from
+  # Mail matching nothing above still surfaces as a plain "reply
   # received" suggestion when it looks application-related — this gate
   # keeps company newsletters and marketing out of the tracker.
   reply_markers:

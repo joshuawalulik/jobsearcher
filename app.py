@@ -232,6 +232,25 @@ def _app_dict(row) -> dict:
     return app_row
 
 
+def _sender(item: dict) -> str:
+    """'Name <address>', or whichever of the two the row has."""
+    name, addr = item.get("from_name"), item.get("from_addr")
+    if name and addr:
+        return f"{name} <{addr}>"
+    return name or addr or "?"
+
+
+def _ignored_mail(conn) -> dict:
+    """Template context for the tracker's Ignored mail list."""
+    rows = []
+    for row in db.fetch_ignored_emails(conn):
+        item = dict(row)
+        item["gmail_url"] = email_sync.gmail_link(item["message_id"])
+        item["sender"] = _sender(item)
+        rows.append(item)
+    return {"ignored": rows, "ignored_count": db.count_ignored_emails(conn)}
+
+
 def _attach_suggestions(conn, apps: list[dict]) -> None:
     """Give each app dict its email activity: `suggestions` (pending,
     actionable box on the card) and `email_replies` (accepted history,
@@ -242,6 +261,8 @@ def _attach_suggestions(conn, apps: list[dict]) -> None:
         bucket = pending if row["status"] == "pending" else replies
         item = dict(row)
         item["gmail_url"] = email_sync.gmail_link(item["message_id"])
+        item["kind_label"] = email_sync.kind_label(item["kind"], item["suggested_lane"])
+        item["sender"] = _sender(item)
         bucket.setdefault(item["application_id"], []).append(item)
     for app_row in apps:
         app_row["suggestions"] = pending.get(app_row["id"], [])
@@ -266,7 +287,8 @@ def _lanes(conn) -> list[dict]:
 @app.get("/tracker", response_class=HTMLResponse)
 def tracker(request: Request, conn=Depends(get_db)):
     return templates.TemplateResponse(
-        request, "tracker.html", {"lanes": _lanes(conn), "all_lanes": db.LANES}
+        request, "tracker.html",
+        {"lanes": _lanes(conn), "all_lanes": db.LANES, **_ignored_mail(conn)},
     )
 
 
@@ -470,7 +492,7 @@ def email_sync_now(request: Request, conn=Depends(get_db)):
         request,
         "_email_sync_status.html",
         {"message": email_sync.format_summary(summary), "error": None,
-         "lanes": _lanes(conn), "all_lanes": db.LANES},
+         "lanes": _lanes(conn), "all_lanes": db.LANES, **_ignored_mail(conn)},
     )
 
 
@@ -507,7 +529,7 @@ def dismiss_suggestion(sid: int, request: Request, conn=Depends(get_db)):
 _CONTACT_FORM_FIELDS = (
     "status", "priority", "name", "company", "email", "linkedin_url",
     "kind_detail", "ask", "next_step", "date_contacted", "last_reply",
-    "verify_flag",
+    "verify_flag", "location",
 )
 _CONTACTS_CHANGED = {"HX-Trigger": "contactsChanged"}
 
@@ -524,7 +546,7 @@ def _contacts_context(conn, cfg: dict, params: dict) -> dict:
     if skipped_tab:
         shown = outreach.filter_contacts(
             rows, cfg, status="Skip", track=params.get("track") or None,
-            search=params.get("q") or None,
+            search=params.get("q") or None, location=params.get("location") or None,
         )
     else:
         shown = outreach.visible_contacts(
@@ -534,11 +556,13 @@ def _contacts_context(conn, cfg: dict, params: dict) -> dict:
             priority=params.get("priority") or None,
             search=params.get("q") or None,
             show_c=bool(params.get("show_c")),
+            location=params.get("location") or None,
         )
     views = {c["id"]: _contact_view(c, cfg) for c in rows}
     return {
         "tab": "skipped" if skipped_tab else "active",
         "params": params,
+        "locations": outreach.contact_locations(rows),
         "groups": [
             (track, [views[c["id"]] for c in group])
             for track, group in outreach.group_by_track(shown)
@@ -711,6 +735,7 @@ def contact_add(
     priority: str = Form(""),
     next_step: str = Form(""),
     notes: str = Form(""),
+    location: str = Form(""),
     conn=Depends(get_db),
 ):
     cfg = _outreach_cfg()
@@ -726,6 +751,7 @@ def contact_add(
         "track": track, "source": source, "name": name, "company": company,
         "email": email, "linkedin_url": linkedin_url, "kind_detail": kind_detail,
         "priority": priority, "next_step": next_step, "notes": notes,
+        "location": location,
     }
     try:
         fields, warnings = outreach.plan_new_contact(

@@ -176,6 +176,14 @@ def test_add_contact(outreach_db):
     assert row["status"] == "Not started"
 
 
+def test_location_is_set_on_add_and_filters_the_list(outreach_db):
+    mcp_server.add_contact(track="agency", name="Sam Roe", location="AZ")
+    mcp_server.add_contact(track="agency", name="Pat Roe", location="NY")
+    found = mcp_server.list_contacts(location="az")
+    assert [c["name"] for c in found] == ["Sam Roe"]
+    assert found[0]["location"] == "AZ"
+
+
 def test_add_contact_duplicate_email_returns_the_existing_one(outreach_db):
     contact_id = _contact(outreach_db, email="pat@acme.example")
     result = mcp_server.add_contact(track="agency", name="P", email="PAT@acme.example")

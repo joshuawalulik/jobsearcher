@@ -26,7 +26,7 @@
       <tr class="contact-row" hx-get="/contacts/{{ c.contact_id }}/modal" hx-target="#modal"
           hx-swap="innerHTML" hx-trigger="click[opensContactModal(event)]">
         <td>{{ c.name or c.company }}</td>
-        <td>{{ c.company or '—' }}</td>
+        <td>{{ c.company or '—' }}{% if c.location %} <span class="contact-badge location">{{ c.location }}</span>{% endif %}</td>
         <td class="contact-due">{{ c.needs_action }}</td>
         <td></td>
       </tr>
@@ -85,7 +85,7 @@
           {% if c.referral_path %}<span class="contact-badge path">{{ 'Standing referral' if c.standing_referral else 'Referral path' }}</span>{% endif %}
           {% if c.verify_flag %}<span class="verify-flag" title="{{ c.verify_flag }}">Verify</span>{% endif %}
         </td>
-        <td>{{ c.company or '—' }}</td>
+        <td>{{ c.company or '—' }}{% if c.location %} <span class="contact-badge location">{{ c.location }}</span>{% endif %}</td>
         {% if tab == 'skipped' %}
         <td>{{ c.do_not_contact or c.notes or c.ask or '—' }}</td>
         <td class="num">

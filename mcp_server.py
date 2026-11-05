@@ -200,11 +200,13 @@ def list_contacts(
     status: str | None = None,
     priority: str | None = None,
     company: str | None = None,
+    location: str | None = None,
 ) -> list[dict]:
     """Recruiter and referral contacts, best priority first.
 
     Filters: track (agency, company_recruiter, referral, mentor, platform), status,
-    priority (A, B, C, skip), and company (any part of the name). Skipped
+    priority (A, B, C, skip), company (any part of the name) and location
+    (the market they cover, such as NY, AZ or Remote). Skipped
     contacts are hidden unless status="Skip". Use get_contact(contact_id) for
     peer history, the interaction log and a message template.
     """
@@ -215,7 +217,8 @@ def list_contacts(
     finally:
         conn.close()
     matches = outreach.filter_contacts(
-        rows, cfg, track=track, status=status, priority=priority, company=company
+        rows, cfg, track=track, status=status, priority=priority, company=company,
+        location=location,
     )
     return [outreach.contact_summary(c, _today(), cfg) for c in matches]
 
@@ -259,11 +262,13 @@ def add_contact(
     next_step: str | None = None,
     notes: str | None = None,
     source: str | None = None,
+    location: str | None = None,
 ) -> dict:
     """Add a contact. track is agency, company_recruiter, referral, mentor or platform.
 
     Needs a name or a company, so a firm with no person yet is fine. Never
-    invent a name or an email: leave unknown fields out. If the email is
+    invent a name or an email: leave unknown fields out. location is a short
+    label for the market they cover, such as NY, AZ or Remote. If the email is
     already saved, nothing is added and the existing contact comes back.
     Returns warnings to show the user.
     """
@@ -284,6 +289,7 @@ def add_contact(
                 "linkedin_url": linkedin_url, "kind_detail": kind_detail,
                 "priority": priority, "nyc_relevance": nyc_relevance, "ask": ask,
                 "next_step": next_step, "notes": notes, "source": source,
+                "location": location,
             },
             existing,
             cfg,

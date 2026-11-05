@@ -351,6 +351,66 @@ def test_tracker_shows_pending_suggestion_with_actions(client):
     assert 'hx-post="/email/sync"' in page
 
 
+def test_card_shows_label_sender_and_deciding_sentence(client):
+    app_id = track(client)
+    db.set_application_lane(client.db, app_id, "applied")
+    db.add_email_suggestion(
+        client.db, application_id=app_id, msg_uid="7",
+        from_addr="jane.doe@acme.com", from_name="Jane Doe", subject="Quick question",
+        received_at="2026-09-10 16:30:00", suggested_lane=None,
+        reason="from a person, not an automated sender", kind="person",
+        evidence="Do you have time to talk this week?",
+    )
+    page = client.get("/tracker").text
+    assert '<span class="kind-pill">Person</span>' in page
+    assert "Jane Doe &lt;jane.doe@acme.com&gt;" in page
+    assert "Do you have time to talk this week?" in page
+    assert "Save reply" in page
+    modal = client.get(f"/applications/{app_id}/modal").text
+    assert "Jane Doe &lt;jane.doe@acme.com&gt;" in modal
+    assert "Do you have time to talk this week?" in modal
+
+
+def test_old_rows_without_a_kind_still_render(client):
+    app_id = track(client)
+    db.set_application_lane(client.db, app_id, "applied")
+    suggest(client, app_id)  # no kind, no evidence, no sender name
+    page = client.get("/tracker").text
+    assert '<span class="kind-pill">Rejection</span>' in page
+    assert "r@acme.com" in page
+    assert "email-evidence" not in page
+
+
+def test_filed_receipt_is_reply_history_not_a_card(client):
+    app_id = track(client)
+    db.set_application_lane(client.db, app_id, "applied")
+    db.add_email_suggestion(
+        client.db, application_id=app_id, msg_uid="8", from_addr="no-reply@acme.com",
+        subject="Thanks for applying", received_at="2026-09-10 16:30:00",
+        suggested_lane=None, reason='automatic receipt: "received your application"',
+        kind="receipt", status="accepted",
+    )
+    page = client.get("/tracker").text
+    assert '<span class="kind-pill">Receipt</span>' in page
+    assert "Save reply" not in page
+    assert "/email/suggestions/" not in page
+
+
+def test_ignored_mail_is_listed_with_its_reason(client):
+    assert "Ignored mail" not in client.get("/tracker").text
+    db.add_ignored_email(
+        client.db, msg_uid="9", company="Acme", from_name=None,
+        from_addr="no-reply@acme.com", subject="Your verification code",
+        received_at="2026-09-10 16:30:00", message_id="<mid9@acme.com>",
+        reason='ignored: mentions "verification code"',
+    )
+    page = client.get("/tracker").text
+    assert "Ignored mail (1)" in page
+    assert "Your verification code" in page
+    assert "mentions &#34;verification code&#34;" in page
+    assert "rfc822msgid%3Amid9%40acme.com" in page
+
+
 def test_accept_suggestion_moves_lane_and_resolves(client):
     app_id = track(client)
     db.set_application_lane(client.db, app_id, "applied")
@@ -461,7 +521,7 @@ def test_email_sync_endpoint_runs_sync_and_refreshes_board(client, monkeypatch):
             subject="Phone screen?", received_at="2026-09-11 10:00:00",
             suggested_lane="interviewing", reason='matched "phone screen"',
         )
-        return {"companies": 1, "emails_scanned": 3, "new": 1}
+        return {"companies": 1, "emails_scanned": 3, "new": 1, "receipts": 0, "ignored": 0}
 
     monkeypatch.setattr(email_sync, "sync", fake_sync)
     page = client.post("/email/sync").text

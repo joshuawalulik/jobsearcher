@@ -34,6 +34,7 @@
           {% for p in priorities if p != 'skip' %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
         </select>
       </label>
+      <label>Location <input type="text" name="location" list="contact-locations" placeholder="NY, AZ, Remote"></label>
       <label>What they do <input type="text" name="kind_detail"></label>
       <label>Next step <input type="text" name="next_step"></label>
       <label>Notes <input type="text" name="notes"></label>
@@ -42,6 +43,9 @@
   </form>
   <div id="add-contact-result"></div>
 </details>
+<datalist id="contact-locations">
+  {% for l in locations %}<option value="{{ l }}"></option>{% endfor %}
+</datalist>
 <form id="contact-filters" class="contact-filters" hx-get="/contacts/body"
       hx-target="#contacts-body" hx-swap="innerHTML"
       hx-trigger="change, input changed delay:250ms from:#contact-search, submit">
@@ -51,6 +55,10 @@
   <select name="track" aria-label="Type">
     <option value="">All types</option>
     {% for t in tracks %}<option value="{{ t }}" {% if params.track == t %}selected{% endif %}>{{ t | replace('_', ' ') | capitalize }}</option>{% endfor %}
+  </select>
+  <select name="location" aria-label="Location">
+    <option value="">All locations</option>
+    {% for l in locations %}<option value="{{ l }}" {% if params.location == l %}selected{% endif %}>{{ l }}</option>{% endfor %}
   </select>
   {% if tab == 'active' %}
   <select name="status" aria-label="Status">

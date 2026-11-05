@@ -119,6 +119,25 @@ def test_filters_narrow_the_body(client, conn):
     assert "Company Person" not in html
 
 
+def test_location_tag_and_filter(client, conn):
+    contact(conn, name="Desert Person", location="AZ")
+    contact(conn, name="City Person", location="NY")
+    page = client.get("/contacts").text
+    assert '<option value="AZ"' in page
+    assert '<span class="contact-badge location">NY</span>' in page
+    html = client.get("/contacts/body?location=AZ").text
+    assert "Desert Person" in html
+    assert "City Person" not in html
+
+
+def test_location_saves_from_the_add_and_edit_forms(client, conn):
+    client.post("/contacts", data={"track": "agency", "name": "Sam Roe", "location": "NY"})
+    row = next(c for c in db.fetch_contacts(conn) if c["name"] == "Sam Roe")
+    assert row["location"] == "NY"
+    client.post(f"/contacts/{row['id']}", data={"location": "Remote"})
+    assert db.get_contact(conn, row["id"])["location"] == "Remote"
+
+
 def test_empty_page_renders(client, conn):
     html = client.get("/contacts").text
     assert "No contacts match." in html

@@ -79,6 +79,12 @@ CREATE TABLE IF NOT EXISTS email_suggestions (
     -- be reread and deep-linked (Gmail rfc822msgid search) later.
     body            TEXT,
     message_id      TEXT,
+    -- Display name of the sender, what the mail is (rejected, offer,
+    -- interviewing, receipt, person, reply) and the sentence that decided
+    -- it. NULL on rows from before these columns existed.
+    from_name       TEXT,
+    kind            TEXT,
+    evidence        TEXT,
     -- NULL = "reply received", no lane change suggested.
     suggested_lane  TEXT CHECK (suggested_lane IS NULL OR suggested_lane IN
                     ('considering', 'ready', 'applied', 'interviewing',
@@ -88,6 +94,22 @@ CREATE TABLE IF NOT EXISTS email_suggestions (
                     ('pending', 'accepted', 'dismissed')),
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (application_id, msg_uid)
+);
+
+-- Mail the sync filtered out on purpose (verification codes, account
+-- mail, newsletters), kept so a bad filter can be noticed. No body: the
+-- subject, sender and reason are enough, and codes shouldn't be stored.
+CREATE TABLE IF NOT EXISTS email_ignored (
+    id              INTEGER PRIMARY KEY,
+    msg_uid         TEXT NOT NULL UNIQUE,
+    company         TEXT,
+    from_name       TEXT,
+    from_addr       TEXT,
+    subject         TEXT,
+    received_at     TEXT,
+    message_id      TEXT,
+    reason          TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- One row per sweep+rescore run (launchd or the UI button), so the feed
@@ -139,6 +161,7 @@ CREATE TABLE IF NOT EXISTS contacts (
     -- 1 = this person will refer the user whenever there's a role, so their
     -- company is watched for matching postings.
     standing_referral INTEGER NOT NULL DEFAULT 0,
+    location        TEXT,  -- the market they cover: NY, AZ, Remote
     -- Set when a contact is taken out of the tool. The row stays so the
     -- removal can be undone and a re-import won't bring them back.
     removed_at      TEXT,
@@ -210,7 +233,7 @@ _CONTACT_FIELDS = (
     "name", "company", "email", "linkedin_url", "track", "kind_detail",
     "priority", "nyc_relevance", "ask", "status", "date_contacted",
     "last_reply", "next_step", "notes", "source", "peer_history",
-    "verify_flag", "gmail_draft_id", "standing_referral",
+    "verify_flag", "gmail_draft_id", "standing_referral", "location",
 )
 
 
@@ -245,12 +268,22 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrate_companies_check(conn)
     _migrate_applications_check(conn)
     _migrate_email_suggestions_check(conn)
+    # After the rebuild above, whose table copy doesn't carry these.
+    sugg_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(email_suggestions)")
+    }
+    for col in ("from_name", "kind", "evidence"):
+        if col not in sugg_columns:
+            conn.execute(f"ALTER TABLE email_suggestions ADD COLUMN {col} TEXT")
+    conn.commit()
     _migrate_contacts_check(conn)
     contact_columns = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)")}
     if "standing_referral" not in contact_columns:
         conn.execute(
             "ALTER TABLE contacts ADD COLUMN standing_referral INTEGER NOT NULL DEFAULT 0"
         )
+    if "location" not in contact_columns:
+        conn.execute("ALTER TABLE contacts ADD COLUMN location TEXT")
         conn.commit()
 
 
@@ -823,29 +856,86 @@ def add_email_suggestion(
     reason: str,
     body: str | None = None,
     message_id: str | None = None,
+    from_name: str | None = None,
+    kind: str | None = None,
+    evidence: str | None = None,
+    status: str = "pending",
 ) -> bool:
     """Store one inbox suggestion. Returns False if this message was
-    already suggested for this application (any status)."""
+    already suggested for this application (any status). Automatic
+    receipts arrive with status 'accepted': straight into reply history."""
     cur = conn.execute(
         """
         INSERT OR IGNORE INTO email_suggestions
             (application_id, msg_uid, from_addr, subject, received_at,
-             suggested_lane, reason, body, message_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             suggested_lane, reason, body, message_id, from_name, kind,
+             evidence, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (application_id, msg_uid, from_addr, subject, received_at,
-         suggested_lane, reason, body, message_id),
+         suggested_lane, reason, body, message_id, from_name, kind,
+         evidence, status),
     )
     conn.commit()
     return cur.rowcount > 0
+
+
+def add_ignored_email(
+    conn: sqlite3.Connection,
+    *,
+    msg_uid: str,
+    company: str | None,
+    from_name: str | None,
+    from_addr: str | None,
+    subject: str | None,
+    received_at: str | None,
+    message_id: str | None,
+    reason: str,
+) -> bool:
+    """Record mail filtered out on purpose. False if already recorded."""
+    cur = conn.execute(
+        """
+        INSERT OR IGNORE INTO email_ignored
+            (msg_uid, company, from_name, from_addr, subject, received_at,
+             message_id, reason)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (msg_uid, company, from_name, from_addr, subject, received_at,
+         message_id, reason),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def fetch_ignored_emails(conn: sqlite3.Connection, limit: int = 25) -> list[sqlite3.Row]:
+    """Most recent filtered mail, for the tracker's Ignored list."""
+    return conn.execute(
+        "SELECT * FROM email_ignored ORDER BY received_at DESC, id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
+def count_ignored_emails(conn: sqlite3.Connection) -> int:
+    return conn.execute("SELECT count(*) AS n FROM email_ignored").fetchone()["n"]
+
+
+def known_email_uids(conn: sqlite3.Connection) -> set[str]:
+    """Every mail UID already handled, whichever application or list it
+    went to. One email belongs to one place, so a known UID is never
+    routed again when its application changes lanes."""
+    rows = conn.execute(
+        "SELECT msg_uid FROM email_suggestions UNION SELECT msg_uid FROM email_ignored"
+    ).fetchall()
+    return {row["msg_uid"] for row in rows}
 
 
 def fetch_pending_suggestions(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Pending suggestions, newest mail first, for the tracker cards."""
     return conn.execute(
         """
-        SELECT id, application_id, msg_uid, from_addr, subject, received_at,
-               suggested_lane, reason, body, message_id
+        SELECT id, application_id, msg_uid, from_addr, from_name, subject,
+               received_at, suggested_lane, reason, body, message_id, kind,
+               evidence
         FROM email_suggestions WHERE status = 'pending'
         ORDER BY received_at DESC, id DESC
         """
@@ -867,8 +957,9 @@ def fetch_email_activity(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     (newsletters etc.) and stay hidden."""
     return conn.execute(
         """
-        SELECT id, application_id, msg_uid, from_addr, subject, received_at,
-               suggested_lane, reason, status, body, message_id
+        SELECT id, application_id, msg_uid, from_addr, from_name, subject,
+               received_at, suggested_lane, reason, status, body, message_id,
+               kind, evidence
         FROM email_suggestions WHERE status != 'dismissed'
         ORDER BY received_at DESC, id DESC
         """
