@@ -60,8 +60,7 @@ async def revalidate_static(request: Request, call_next):
     return response
 templates = Jinja2Templates(directory=FRONTEND_DIR)
 
-# Saved message history, git-ignored with the rest of data/.
-CONVERSATIONS_DIR = db.DB_PATH.parent / "conversations"
+CONVERSATIONS_DIR = db.CONVERSATIONS_DIR
 _CONVERSATION_PATH = re.compile(r"data/conversations/([\w./-]+?\.md)")
 # Runs on escaped text, so stop at an entity like &#39;. A bare domain needs a
 # path, which keeps words such as Node.js out.
@@ -755,6 +754,14 @@ def contact_log_interaction(
     db.add_interaction(conn, contact_id, day, channel, direction, summary.strip())
     db.update_contact(conn, contact_id, **fields)
     return _render_contact_modal(request, conn, contact_id, cfg, headers=_CONTACTS_CHANGED)
+
+
+@app.post("/contacts/{contact_id}/seen")
+def contact_seen(contact_id: int, conn=Depends(get_db)):
+    """Dismiss a new-message flag from Due today."""
+    if not db.update_contact(conn, contact_id, new_message=None):
+        raise HTTPException(status_code=404, detail=f"no contact with id {contact_id}")
+    return Response(status_code=200, headers=_CONTACTS_CHANGED)
 
 
 @app.post("/contacts/{contact_id}/restore")

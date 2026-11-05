@@ -28,7 +28,7 @@
         <td>{{ c.name or c.company }}</td>
         <td>{{ c.company or '—' }}{% if c.location %} <span class="contact-badge location">{{ c.location }}</span>{% endif %}</td>
         <td class="contact-due">{{ c.needs_action }}</td>
-        <td></td>
+        <td class="num">{% if c.new_message %}<button class="restore" hx-post="/contacts/{{ c.contact_id }}/seen" hx-swap="none">Dismiss</button>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>

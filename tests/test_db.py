@@ -15,7 +15,7 @@ def conn(tmp_path):
 
 def test_schema_creates_all_tables(conn):
     assert db.table_names(conn) == [
-        "applications", "companies", "contact_applications", "contacts",
+        "applications", "companies", "contact_applications", "contact_mail", "contacts",
         "email_ignored", "email_suggestions", "events", "interactions", "jobs",
         "sweep_runs",
     ]
@@ -24,7 +24,7 @@ def test_schema_creates_all_tables(conn):
 def test_init_db_is_idempotent(conn):
     db.init_db(conn)
     assert db.table_names(conn) == [
-        "applications", "companies", "contact_applications", "contacts",
+        "applications", "companies", "contact_applications", "contact_mail", "contacts",
         "email_ignored", "email_suggestions", "events", "interactions", "jobs",
         "sweep_runs",
     ]
@@ -287,6 +287,19 @@ def test_location_is_added_to_an_existing_contacts_table(conn):
     assert db.get_contact(conn, contact_id)["location"] is None
     db.update_contact(conn, contact_id, location="NY")
     assert db.get_contact(conn, contact_id)["location"] == "NY"
+
+
+def test_new_message_is_added_to_an_existing_contacts_table(conn):
+    conn.execute("ALTER TABLE contacts DROP COLUMN new_message")
+    contact_id = _contact(conn)
+    db.init_db(conn)
+    assert db.get_contact(conn, contact_id)["new_message"] is None
+
+
+def test_contact_mail_records_each_message_once(conn):
+    db.record_contact_mail(conn, "<a@x>", None, "skipped")
+    db.record_contact_mail(conn, "<a@x>", 5, "log")
+    assert db.seen_contact_mail(conn) == {"<a@x>"}
 
 
 def test_flag_is_added_to_a_table_that_already_has_the_mentor_track(conn):

@@ -10,6 +10,7 @@ a sweep without a rescore leaves new postings invisible.
 
 from datetime import datetime, timezone
 
+import contact_sync
 import db
 import email_sync
 from scoring.rescore import rescore_all
@@ -54,6 +55,7 @@ def main() -> None:
             f"{rescored['rejected']} rejected."
         )
         _email_sync(conn, profile)
+        _contact_sync(conn, profile)
     finally:
         conn.close()
 
@@ -68,6 +70,18 @@ def _email_sync(conn, profile: dict) -> None:
         print(email_sync.format_summary(email_sync.sync(conn, profile, secrets=secrets)))
     except Exception as exc:
         print(f"Email sync failed: {exc}")
+
+
+def _contact_sync(conn, profile: dict) -> None:
+    """Contacts' mail → the interaction log; never fatal, and silently
+    skipped until config/secrets.yaml exists."""
+    secrets = email_sync.load_secrets()
+    if not (profile.get("contact_sync") or {}).get("enabled") or secrets is None:
+        return
+    try:
+        print(contact_sync.format_summary(contact_sync.sync(conn, profile, secrets=secrets)))
+    except Exception as exc:
+        print(f"Contact mail sync failed: {exc}")
 
 
 if __name__ == "__main__":

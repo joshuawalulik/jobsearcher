@@ -231,6 +231,32 @@ scraper:
   timeout_seconds: 10
   user_agent: "personal-job-tool (you@example.com)"
 
+contact_sync:         # contacts' mail -> interaction log, after each autosweep
+  enabled: true       # needs config/secrets.yaml, like email:
+  folder: '"[Gmail]/All Mail"'
+  # Overlaps on purpose: Message-IDs stop repeats, and a sleeping machine
+  # shouldn't lose a week of mail.
+  lookback_days: 7
+  # InMail alerts carry the full text. Unknown senders become leads.
+  alert_senders:
+    - inmail-hit-reply@linkedin.com
+    - hit-reply@linkedin.com
+  # Only say someone wrote, so these count for known contacts only.
+  digest_senders:
+    - messaging-digest-noreply@linkedin.com
+  lead_priority: C
+  # Paid job-search services and the like never become leads.
+  ignore_names: []
+  ignore_phrases:
+    - job application service
+    - "money back"
+  # A new lead gets a label only when exactly one of these matches.
+  locations:
+    - label: NY
+      words: [New York, NYC, Brooklyn, Manhattan]
+    - label: Remote
+      words: [remote]
+
 email:                # inbox → tracker suggestions (creds in git-ignored config/secrets.yaml)
   enabled: true       # needs config/secrets.yaml (the UI explains when it's missing)
   imap_host: imap.gmail.com
