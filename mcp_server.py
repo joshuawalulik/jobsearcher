@@ -21,6 +21,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 import db
 import outreach
+import referral_watch
 from profile_io import PROFILE_PATH
 
 mcp = MCPServer(
@@ -51,7 +52,9 @@ mcp = MCPServer(
         "handles experienced engineering hiring), never a job request. "
         "Agencies get asked whether they are working relevant searches. "
         "Referrals need rapport first, so a first touch is never a referral "
-        "ask. Mentors are there for advice and information only: never ask "
+        "ask. list_referral_watch shows open roles to send to standing "
+        "referrals; set standing_referral with update_contact when someone "
+        "offers a referral for any future role. Mentors are there for advice and information only: never ask "
         "them for a job, a referral or an intro unless the user says to. "
         "Show any warnings a tool returns to the user. If do_not_contact "
         "is set, never draft to or suggest that person."
@@ -167,6 +170,11 @@ def _contact_tool(fn):
 def _outreach_cfg() -> dict:
     # Read per call so profile edits apply without restarting the server.
     return yaml.safe_load(PROFILE_PATH.read_text())["outreach"]
+
+
+def _years_cfg() -> dict:
+    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    return profile["scoring"]["seniority"]["years_to_level"]
 
 
 def _today() -> str:
@@ -418,6 +426,23 @@ def link_contact_to_job(contact_id: int, app_id: int, note: str | None = None) -
     finally:
         conn.close()
     return f"Linked contact {contact_id} to app_id {app_id}."
+
+
+@_contact_tool
+def list_referral_watch() -> list[dict]:
+    """Open roles to send to standing referrals, by contact.
+
+    Covers every contact marked standing_referral. A role stays here until it's
+    tied with link_contact_to_job or dismissed in the feed, and leaves by itself
+    once the posting is delisted.
+    """
+    cfg = _outreach_cfg()
+    years_cfg = _years_cfg()
+    conn = _connect()
+    try:
+        return referral_watch.find_matches(conn, cfg, years_cfg)
+    finally:
+        conn.close()
 
 
 @_contact_tool

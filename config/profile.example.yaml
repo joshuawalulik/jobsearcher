@@ -165,6 +165,23 @@ outreach:             # recruiter and referral contacts (data/jobs.db contacts t
   # First item in each list is the canonical name.
   company_aliases:
     - [Acme Corp, Acme]
+  # Standing referrals: contacts with standing_referral set get their company
+  # watched for these roles. Locations and excluded titles follow gates:, and
+  # level uses scoring.seniority.years_to_level, so it agrees with the feed.
+  referral_watch:
+    levels: [mid]       # add senior here to include stretch roles
+    title_keywords:
+      - software
+      - full stack
+      - full-stack
+      - fullstack
+      - frontend
+      - front-end
+      - front end
+      - backend
+      - back-end
+      - back end
+      - developer
   # Warn before cold outreach to a company an active process already covers.
   dont_double_up:
     - company: Globex

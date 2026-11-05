@@ -113,6 +113,7 @@ OUTREACH_CFG = {
     "dont_double_up": [{"company": "Initrode", "covered_by": "Pat Doe"}],
     "do_not_contact": [{"company": "Umbrella", "email_domains": ["umbrella.example"],
                         "reason": "former employer"}],
+    "referral_watch": {"levels": ["mid"], "title_keywords": ["software"]},
     "templates": {
         "company_recruiter": {"subject": "Hello", "body": "Hi {first}, about {company}."},
         "agency": {"subject": "Searches", "body": "Hi {first}."},
@@ -318,6 +319,27 @@ def test_contacts_for_job_flags_a_real_connection(outreach_db):
     assert mcp_server.contacts_for_job(app_id)["referral_path_contacts"] == ["Pat Doe"]
 
 
+def test_list_referral_watch(outreach_db, monkeypatch):
+    monkeypatch.setattr(mcp_server, "_years_cfg", lambda: {"junior_max": 1, "senior_min": 5})
+    outreach_db.execute(
+        "INSERT INTO companies (name, ats_type, slug) VALUES ('Example', 'greenhouse', 'example')"
+    )
+    job_id = outreach_db.execute(
+        """
+        INSERT INTO jobs (company_id, external_id, title, description, gate_failed)
+        VALUES (1, 'watch-1', 'Software Engineer', '3+ years of experience', 0)
+        """
+    ).lastrowid
+    outreach_db.commit()
+    contact_id = _contact(outreach_db, company="Example", track="referral",
+                          source="own_pipeline")
+    assert mcp_server.list_referral_watch() == []
+    result = mcp_server.update_contact(contact_id, {"standing_referral": True})
+    assert result["contact"]["standing_referral"] is True
+    [match] = mcp_server.list_referral_watch()
+    assert (match["job_id"], match["contact_name"]) == (job_id, "Pat Doe")
+
+
 def test_contacts_for_job_unknown(outreach_db):
     with pytest.raises(ValueError):
         mcp_server.contacts_for_job(999)
@@ -379,4 +401,5 @@ def test_all_tools_are_exposed_and_existing_ones_remain():
         "list_contacts", "get_contact", "add_contact", "update_contact",
         "restore_contact", "log_interaction", "list_followups_due",
         "contacts_for_job", "link_contact_to_job", "weekly_summary",
+        "list_referral_watch",
     }

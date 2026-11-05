@@ -22,6 +22,7 @@ import db
 import email_sync
 import outreach
 import profile_io
+import referral_watch
 from autosweep import sweep_and_rescore
 from scoring.rescore import rescore_all
 from scoring.score import score_job
@@ -69,6 +70,11 @@ def get_db():
 
 def _outreach_cfg() -> dict:
     return load_profile(PROFILE_PATH).get("outreach") or {}
+
+
+def _years_cfg() -> dict:
+    """The scorer's level bands, so the referral watcher agrees with the feed."""
+    return load_profile(PROFILE_PATH)["scoring"]["seniority"]["years_to_level"]
 
 
 def _today() -> str:
@@ -156,8 +162,9 @@ def feed_partial(request: Request, q: str = "", conn=Depends(get_db)):
 def dismiss(job_id: int, conn=Depends(get_db)) -> Response:
     if not db.dismiss_job(conn, job_id):
         raise HTTPException(status_code=404, detail=f"no job with id {job_id}")
-    # Empty 200: the card's hx-swap="delete" removes it from the feed.
-    return Response(status_code=200)
+    # Empty 200: the card's hx-swap="delete" removes it from the feed. The header
+    # refreshes the Contacts page when the dismiss came from its Due today list.
+    return Response(status_code=200, headers=_CONTACTS_CHANGED)
 
 
 @app.get("/dismissed", response_class=HTMLResponse)
@@ -540,6 +547,7 @@ def _contacts_context(conn, cfg: dict, params: dict) -> dict:
         "active_count": sum(1 for c in rows if c["status"] != "Skip"),
         "skipped_count": sum(1 for c in rows if c["status"] == "Skip"),
         "due": [views[c["id"]] for c, _ in outreach.follow_ups_due(rows, today, cfg)],
+        "watch": referral_watch.find_matches(conn, cfg, _years_cfg()),
         "week": outreach.weekly_summary(rows, db.fetch_interactions(conn), today, cfg),
     }
 
@@ -572,8 +580,10 @@ def contacts_body(request: Request, conn=Depends(get_db)):
 @app.get("/contacts/due-count", response_class=HTMLResponse)
 def contacts_due_count(conn=Depends(get_db)):
     """Nav badge. Empty when nothing is due, so CSS can hide it."""
-    due = outreach.follow_ups_due(db.fetch_contacts(conn), _today(), _outreach_cfg())
-    return HTMLResponse(str(len(due)) if due else "")
+    cfg = _outreach_cfg()
+    due = outreach.follow_ups_due(db.fetch_contacts(conn), _today(), cfg)
+    total = len(due) + len(referral_watch.find_matches(conn, cfg, _years_cfg()))
+    return HTMLResponse(str(total) if total else "")
 
 
 def _render_contact_modal(request, conn, contact_id, cfg, *, warnings=(), error=None,
@@ -619,6 +629,10 @@ async def contact_update(contact_id: int, request: Request, conn=Depends(get_db)
             value = form[field].strip() or None
             if value != row[field]:
                 changes[field] = value
+    if "standing_referral" in form:
+        wanted = int(form["standing_referral"])
+        if wanted != row["standing_referral"]:
+            changes["standing_referral"] = wanted
     if form.get("notes", "").strip():
         changes["notes"] = form["notes"]
     try:

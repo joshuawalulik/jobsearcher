@@ -136,6 +136,9 @@ CREATE TABLE IF NOT EXISTS contacts (
     peer_history    TEXT,
     verify_flag     TEXT,
     gmail_draft_id  TEXT,
+    -- 1 = this person will refer the user whenever there's a role, so their
+    -- company is watched for matching postings.
+    standing_referral INTEGER NOT NULL DEFAULT 0,
     -- Set when a contact is taken out of the tool. The row stays so the
     -- removal can be undone and a re-import won't bring them back.
     removed_at      TEXT,
@@ -207,7 +210,7 @@ _CONTACT_FIELDS = (
     "name", "company", "email", "linkedin_url", "track", "kind_detail",
     "priority", "nyc_relevance", "ask", "status", "date_contacted",
     "last_reply", "next_step", "notes", "source", "peer_history",
-    "verify_flag", "gmail_draft_id",
+    "verify_flag", "gmail_draft_id", "standing_referral",
 )
 
 
@@ -243,6 +246,12 @@ def init_db(conn: sqlite3.Connection) -> None:
     _migrate_applications_check(conn)
     _migrate_email_suggestions_check(conn)
     _migrate_contacts_check(conn)
+    contact_columns = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)")}
+    if "standing_referral" not in contact_columns:
+        conn.execute(
+            "ALTER TABLE contacts ADD COLUMN standing_referral INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
 
 
 def _migrate_companies_check(conn: sqlite3.Connection) -> None:
@@ -1038,6 +1047,39 @@ def linked_contact_ids(conn: sqlite3.Connection, application_id: int) -> set[int
 def fetch_contact_links(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT contact_id, application_id FROM contact_applications"
+    ).fetchall()
+
+
+def fetch_companies(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT id, name FROM companies ORDER BY id").fetchall()
+
+
+def fetch_open_jobs(
+    conn: sqlite3.Connection, company_ids: list[int], contact_id: int
+) -> list[sqlite3.Row]:
+    """Jobs at these companies that a referral could still be tied to, newest first.
+
+    gate_failed = 0 is the feed's own test, so the user's locations, excluded
+    titles and delisted postings all apply. Dismissed jobs and jobs already
+    linked to this contact are left out.
+    """
+    if not company_ids:
+        return []
+    marks = ", ".join("?" for _ in company_ids)
+    return conn.execute(
+        f"""
+        SELECT j.id, j.title, j.location, j.url, j.description, j.score,
+               j.first_seen, c.name AS company
+        FROM jobs j JOIN companies c ON c.id = j.company_id
+        WHERE j.company_id IN ({marks}) AND j.gate_failed = 0 AND j.dismissed = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM applications a
+              JOIN contact_applications ca ON ca.application_id = a.id
+              WHERE a.job_id = j.id AND ca.contact_id = ?
+          )
+        ORDER BY j.first_seen DESC, j.id
+        """,
+        (*company_ids, contact_id),
     ).fetchall()
 
 
