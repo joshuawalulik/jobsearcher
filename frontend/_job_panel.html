@@ -4,7 +4,7 @@
   <h2>{{ job.title }}</h2>
   <p class="meta">
     {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
-    {%- if job.posted_at %} · posted {{ job.posted_at | short_date }}{% endif %} · No. {{ job.id }}
+    {%- if job.posted_at %} · posted {{ job.posted_at | short_date }}{% endif %}
     {% if job.contact_badge %}<a class="contact-badge{% if job.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ job.company | urlencode }}">{{ job.contact_badge }}</a>{% endif %}
   </p>
   <div class="p-actions">

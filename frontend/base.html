@@ -26,5 +26,22 @@
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+    // Clicking off a slide-over closes it. Clicking another card or row
+    // leaves it to swap in that item's panel instead.
+    document.addEventListener("click", function (evt) {
+      var overlay = document.querySelector(".modal-overlay");
+      if (!overlay || !document.contains(evt.target)) return;
+      if (evt.target.closest(".modal, .app-card, .contact-row")) return;
+      overlay.remove();
+      document.dispatchEvent(new Event("panelClosed"));
+    });
+    // Keyboard users land inside a panel when it opens.
+    document.addEventListener("htmx:afterSettle", function (evt) {
+      if (evt.detail.target.id !== "modal") return;
+      var panel = evt.detail.target.querySelector(".modal");
+      if (panel) { panel.tabIndex = -1; panel.focus({ preventScroll: true }); }
+    });
+  </script>
 </body>
 </html>

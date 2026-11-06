@@ -52,6 +52,7 @@
     if (card) card.classList.add("sel");
   }
   document.addEventListener("htmx:afterSettle", markOpenCard);
+  document.addEventListener("panelClosed", markOpenCard);
   document.addEventListener("keydown", function (evt) {
     if (evt.key === "Escape") closeAppPanel();
   });
@@ -59,13 +60,24 @@
   // untrack) destroys the browser's scroll anchor and the page jumps to
   // the bottom — pin the scroll position across those swaps.
   var boardScroll = null;
+  var openFolds = [];
   function rememberBoardScroll(evt) {
-    if (evt.detail.target && evt.detail.target.id === "board") boardScroll = window.scrollY;
+    if (evt.detail.target && evt.detail.target.id === "board") {
+      boardScroll = window.scrollY;
+      // Show N more stays open across the redraw too.
+      openFolds = Array.from(document.querySelectorAll(".lane-more[open]")).map(function (fold) {
+        return fold.dataset.lane;
+      });
+    }
   }
   document.addEventListener("htmx:beforeSwap", rememberBoardScroll);
   document.addEventListener("htmx:oobBeforeSwap", rememberBoardScroll);
   document.addEventListener("htmx:afterSettle", function () {
     if (boardScroll !== null) {
+      openFolds.forEach(function (lane) {
+        var fold = document.querySelector('.lane-more[data-lane="' + lane + '"]');
+        if (fold) fold.open = true;
+      });
       window.scrollTo(0, boardScroll);
       boardScroll = null;
     }

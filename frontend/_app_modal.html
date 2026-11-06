@@ -10,8 +10,8 @@
         {{ a.company }}
         {% if a.location %} · {{ a.location }}{% endif %}
         {% if a.score is not none %} · score {{ '%g' % a.score }}{% endif %}
-        {% if a.applied_at %} · applied {{ a.applied_at[:10] }}{% endif %}
-        · tracked since {{ a.created_at[:10] }}
+        {% if a.applied_at %} · applied {{ a.applied_at | short_date }}{% endif %}
+        · tracked since {{ a.created_at | short_date }}
       </p>
       <div class="p-actions">
         <select name="lane" aria-label="Lane" class="lane-select" style="flex:1"
@@ -35,7 +35,7 @@
       <ul>
         {% for r in a.suggestions %}
         <li><span class="pending-pill">pending</span> <span class="kind-pill">{{ r.kind_label }}</span>
-          {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
+          {{ r.received_at | short_date }} · {{ r.subject or '(no subject)' }}
           {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}<br>
           <span class="suggestion-mail">{{ r.sender }} · {{ r.reason }}
             {%- if r.suggested_lane %} <svg class="i" aria-hidden="true"><use href="#arrow"/></svg> suggests {{ r.suggested_lane }}{% endif %}</span>
@@ -48,7 +48,7 @@
           {% endif %}</li>
         {% endfor %}
         {% for r in a.email_replies %}
-        <li><span class="kind-pill">{{ r.kind_label }}</span> {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
+        <li><span class="kind-pill">{{ r.kind_label }}</span> {{ r.received_at | short_date }} · {{ r.subject or '(no subject)' }}
           {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}<br>
           <span class="suggestion-mail">{{ r.sender }} · {{ r.reason }}
             {%- if r.suggested_lane %} <svg class="i" aria-hidden="true"><use href="#arrow"/></svg> moved to {{ r.suggested_lane }}{% endif %}</span>

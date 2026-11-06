@@ -33,7 +33,7 @@ the events history — a card that is rejected now but had an interview still co
     <span class="stat-value">{{ summary.applied }}</span>
   </div>
   <div class="stat">
-    <span class="stat-label">Reply rate</span>
+    <span class="stat-label">Advanced rate</span>
     <span class="stat-value">{% if summary.reply_rate is not none %}{{ summary.reply_rate }}%{% else %}—{% endif %}</span>
     <span class="stat-sub">{{ summary.advanced }} of {{ summary.applied }} advanced</span>
   </div>
@@ -62,7 +62,7 @@ the events history — a card that is rejected now but had an interview still co
 </section>
 
 <section class="panel">
-  <h2>Reply rate by score band</h2>
+  <h2>Advanced rate by score band</h2>
   <div class="meters">
     {% for row in bands %}{{ meter_row(row) }}{% endfor %}
   </div>

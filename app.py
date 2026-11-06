@@ -580,7 +580,11 @@ def track(job_id: int, conn=Depends(get_db)):
         conn.commit()
     # Swaps in for the card's Track button (hx-swap="outerHTML"). New
     # applications always start in the considering lane.
-    return '<a class="tracked considering" href="/tracker">considering</a>'
+    # The trigger lets the report refresh if it's showing this job.
+    return HTMLResponse(
+        '<a class="tracked considering" href="/tracker">considering</a>',
+        headers={"HX-Trigger": json.dumps({"jobTracked": job_id})},
+    )
 
 
 @app.post("/applications/{app_id}/lane", response_class=HTMLResponse)
