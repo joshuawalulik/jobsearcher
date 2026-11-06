@@ -1,5 +1,6 @@
 """Feed paging: every job appears exactly once, whatever happens between pages."""
 
+import json
 import re
 
 import pytest
@@ -81,7 +82,7 @@ def test_search_pages_and_counts_across_all_jobs(conn):
 def test_page_shows_the_total_and_only_one_page_of_jobs(conn, client):
     seed_jobs(conn, FEED_PAGE + 3)
     page = client.get("/").text
-    assert f"{FEED_PAGE + 3} matches." in page
+    assert f">{FEED_PAGE + 3}</span>" in page
     assert page.count('class="job-row') == FEED_PAGE
 
 
@@ -102,3 +103,36 @@ def test_loader_keeps_the_search(conn, client):
 def test_short_feed_has_no_loader(conn, client):
     seed_jobs(conn, 3)
     assert "/feed/more" not in client.get("/").text
+
+
+def test_first_page_uses_the_feed_index(conn):
+    seed_jobs(conn, 3)
+    plan = conn.execute(
+        """EXPLAIN QUERY PLAN SELECT j.id FROM jobs j
+           JOIN companies c ON c.id = j.company_id
+           WHERE j.gate_failed = 0 AND j.dismissed = 0 AND j.score IS NOT NULL
+             AND c.ats_type != 'manual'
+           ORDER BY j.score DESC, j.id LIMIT 50"""
+    ).fetchall()
+    assert any("idx_jobs_feed" in row["detail"] for row in plan)
+
+
+def test_refresh_updates_the_count_beside_the_heading(conn, client):
+    seed_jobs(conn, 4)
+    assert 'id="match-count" class="count-note" hx-swap-oob="true"' in client.get("/feed").text
+    assert 'hx-swap-oob="true">4<' not in client.get("/").text
+
+
+def test_breakdown_lists_matched_and_missing_keywords_as_chips(conn, client):
+    ids = seed_jobs(conn, 1)
+    breakdown = {
+        "score": 12, "subtotal": 12, "seniority": "mid", "multipliers": [],
+        "components": [{"category": "preferred", "points": 12, "reason": "preferred keyword 'rest'"}],
+        "coverage": {"preferred": {"matched": ["rest"], "missing": ["graphql"]}},
+    }
+    conn.execute("UPDATE jobs SET score_breakdown = ? WHERE id = ?", (json.dumps(breakdown), ids[0]))
+    conn.commit()
+    page = client.get(f"/jobs/{ids[0]}/detail").text
+    assert '<span class="chip on">rest</span>' in page
+    assert ">graphql</span>" in page
+    assert "+12" in page

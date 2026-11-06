@@ -7,7 +7,7 @@
   color-scheme: dark;
   --bg: #16191d; --rail: #0f1114; --card: #1c2025; --raised: #23282e;
   --ink: #f2f3f4; --body: #d4d8dd; --muted: #aab1ba; --faint: #8d96a1;
-  --line: #2f353c; --line-strong: #454c55;
+  --line: #2f353c; --line-strong: #454c55; --field-line: #6b7480;
   --accent: #7fb2ff; --accent-hover: #a3c8ff; --accent-mid: #3f6fb5; --accent-soft: #172a45;
   --good: #4cc38a; --good-soft: #17352a; --bad: #ff7b7f;
   --title: "Source Serif 4", Georgia, serif;
@@ -95,7 +95,7 @@ label small { font-weight: 400; color: var(--muted); }
 label.check { flex-direction: row; align-items: center; gap: 8px; }
 textarea, input, select {
   font: inherit; font-size: 13.5px; color: var(--ink); background: var(--bg);
-  border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px;
+  border: 1px solid var(--field-line); border-radius: 5px; padding: 6px 8px;
 }
 input[type=checkbox] { accent-color: var(--accent); }
 input::placeholder { color: var(--faint); }
@@ -283,7 +283,7 @@ td.tt a:hover { color: var(--accent); }
 /* --- contacts --- */
 .contact-tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--line); margin: 4px 0 12px; }
 .contact-tabs a { padding: 6px 0; color: var(--muted); text-decoration: none; font-weight: 600; }
-.contact-tabs a.active { color: var(--accent); box-shadow: 0 2px 0 var(--accent); }
+.contact-tabs a.active { color: var(--accent); border-bottom: 2px solid var(--accent); margin-bottom: -1px; }
 .contact-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
 .contact-filters .search { margin-left: 0; }
 .contact-filters select { height: 33px; }
@@ -365,3 +365,24 @@ details[open] > summary::before { transform: rotate(45deg); }
   border-right: 1.7px solid currentColor; border-bottom: 1.7px solid currentColor;
   transform: rotate(-45deg); transition: transform 0.15s;
 }
+
+/* Contacts: every section shares one column grid, and cells stay on one line. */
+.contact-table { table-layout: fixed; }
+.contact-table th:nth-child(1) { width: 25%; }
+.contact-table th:nth-child(2) { width: 19%; }
+.contact-table th:nth-child(3):not(:last-child):not(:nth-last-child(2)) { width: 7%; }
+.contact-table th:nth-child(4):not(:last-child) { width: 8%; }
+.contact-table th:nth-child(6) { width: 10%; }
+.contact-table th:nth-child(7) { width: 8%; }
+.contact-table th:nth-child(4):last-child { width: 80px; }
+.contact-table th, .contact-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-table td.wrap { white-space: normal; }
+.count-note { color: var(--muted); }
+.chips-row { align-items: flex-start; }
+.chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.chip { font-size: 12px; border-radius: 3px; padding: 0 5px; line-height: 19px; }
+.chip.on { background: var(--good-soft); color: var(--good); }
+.chip.off { box-shadow: inset 0 0 0 1px var(--bad); color: var(--bad); }
+.lane-more > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 2px; list-style: none; }
+.lane-more > summary::-webkit-details-marker { display: none; }
+.lane-more[open] > summary { display: none; }

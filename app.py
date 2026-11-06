@@ -267,7 +267,7 @@ def matches_feed(request: Request, q: str = "", conn=Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {**_feed_context(conn, q), **_sweep_context(conn)},
+        {**_feed_context(conn, q), **_sweep_context(conn), "full_page": True},
     )
 
 

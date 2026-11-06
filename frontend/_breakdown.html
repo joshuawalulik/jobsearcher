@@ -15,11 +15,17 @@
     <span class="pts {{ 'neg' if pts < 0 else ('zero' if pts == 0 else 'pos') }}">{{ '%+g' % pts }}</span>
     <span>{{ label }}{% if cov %} <small class="cov">{{ cov.matched | length }} of {{ cov.matched | length + cov.missing | length }} matched</small>{% endif %}</span>
   </li>
+  {% if cov and key in ('required', 'preferred') %}
+  <li class="chips-row"><span class="pts"></span>
+    <span class="chips">
+      {%- for kw in cov.matched %}<span class="chip on">{{ kw }}</span>{% endfor %}
+      {%- for kw in cov.missing %}<span class="chip off" title="missing">{{ kw }}</span>{% endfor -%}
+    </span>
+  </li>
+  {% else %}
   {% for c in items %}
   <li class="cat-item"><span class="pts {{ 'neg' if c.points < 0 else 'pos' }}">{{ '%+g' % c.points }}</span> {{ c.reason }}</li>
   {% endfor %}
-  {% if key == 'required' and cov and cov.missing %}
-  <li class="cat-item missing"><span class="pts"></span> missing: {{ cov.missing | join(', ') }}</li>
   {% endif %}
   {% endif %}
   {% endfor %}
