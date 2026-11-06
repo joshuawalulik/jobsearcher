@@ -374,9 +374,10 @@ details[open] > summary::before { transform: rotate(45deg); }
 .contact-table th:nth-child(4):not(:last-child) { width: 8%; }
 .contact-table th:nth-child(6) { width: 10%; }
 .contact-table th:nth-child(7) { width: 8%; }
-.contact-table th:nth-child(4):last-child { width: 80px; }
+.contact-table th:nth-child(4):last-child { width: 150px; }
 .contact-table th, .contact-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .contact-table td.wrap { white-space: normal; }
+.contact-table td.num { overflow: visible; }
 .count-note { color: var(--muted); }
 .chips-row { align-items: flex-start; }
 .chips { display: flex; flex-wrap: wrap; gap: 3px; }
@@ -417,3 +418,9 @@ button.view-tab.active { background: var(--accent-soft); color: var(--accent); f
 .feed-col .page-head .spacer { display: none; }
 .feed-col .page-head h1, .feed-col .page-head button { flex: none; }
 @media (max-width: 720px) { .feed-col .page-head { flex-wrap: wrap; } }
+
+/* Tracker scores sit in one spot on every card; empty lanes give up their width. */
+.app-card { position: relative; }
+.app-card h3 { padding-right: 34px; }
+.card-score { position: absolute; top: 8px; right: 10px; }
+.lane.lane-quiet { flex: 0 1 150px; min-width: 150px; }
