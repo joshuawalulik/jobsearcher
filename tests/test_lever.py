@@ -26,8 +26,8 @@ def test_normalize_full_posting():
         # bullets) + closing, not just Lever's intro-only descriptionPlain.
         "description": (
             "Build and scale our core APIs. Python, Postgres, AWS.\n\n"
-            "Requirements\n5+ years with Python Postgres & AWS\n\n"
-            "Nice to have\nKubernetes\n\n"
+            "Requirements\n• 5+ years with Python\n• Postgres & AWS\n\n"
+            "Nice to have\n• Kubernetes\n\n"
             "We offer equity and full benefits."
         ),
         "posted_at": "2024-07-03 09:46:40",
@@ -41,7 +41,7 @@ def test_full_description_from_lists_when_intro_empty():
         "descriptionPlain": "",
         "lists": [{"text": "About the role", "content": "<li>Ship things</li>"}],
     }
-    assert lever._full_description(posting) == "About the role\nShip things"
+    assert lever._full_description(posting) == "About the role\n• Ship things"
 
 
 def test_normalize_sparse_posting():

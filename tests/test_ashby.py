@@ -35,7 +35,7 @@ def test_normalize_html_fallback_and_missing_fields():
         "location": None,
         "department": None,
         "url": "https://jobs.ashbyhq.com/acme/0a1b2c3d-4e5f-6a7b-8c9d-e0f1a2b3c4d5",
-        "description": "About the role Own our data & ETL pipelines.",
+        "description": "About the role\n\nOwn our data & ETL pipelines.",
         "posted_at": "2026-06-20 07:15:30",
     }
 

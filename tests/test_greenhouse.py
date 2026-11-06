@@ -23,7 +23,7 @@ def test_normalize_fully_populated_posting(raw_board):
         "location": "New York, NY",
         "department": "Engineering",
         "url": "https://boards.greenhouse.io/acme/jobs/4000001",
-        "description": "Build APIs in Python. FastAPI SQLite",
+        "description": "Build APIs in Python.\n\n• FastAPI\n• SQLite",
         "posted_at": "2026-07-01 16:34:56",
     }
 
@@ -60,3 +60,10 @@ def test_normalize_keeps_absolute_url_as_is(raw_board):
     assert posting["url"] == "https://www.mongodb.com/careers/job/?gh_jid=8054991"
     raw_board["jobs"][0]["absolute_url"] = "https://job-boards.greenhouse.io/acme/jobs/123"
     assert greenhouse.normalize(raw_board)[0]["url"] == "https://job-boards.greenhouse.io/acme/jobs/123"
+
+
+def test_html_to_text_keeps_paragraphs_and_bullets():
+    text = common.html_to_text(
+        "<h2>Role</h2><p>Build   things.</p><ul><li>Python</li><li>SQL</li></ul><br><br><p>Apply.</p>"
+    )
+    assert text == "Role\n\nBuild things.\n\n• Python\n• SQL\n\nApply."
