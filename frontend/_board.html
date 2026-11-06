@@ -6,7 +6,7 @@
     {% for a in lane.apps %}{% include "_app_card.html" %}{% endfor %}
   </details>
   {% else %}
-  <section class="lane">
+  <section class="lane{% if not lane.apps %} lane-quiet{% endif %}">
     <h2>{{ lane.name }} <span class="count">{{ lane.apps | length }}</span></h2>
     {% for a in lane.apps[:12] %}
       {% include "_app_card.html" %}

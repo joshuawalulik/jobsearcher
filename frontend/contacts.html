@@ -5,9 +5,12 @@
 <div class="page">
 <header class="page-head">
   <h1>Contacts</h1>
+  <span class="spacer"></span>
+  <button class="primary" type="button"
+          onclick="var d = document.getElementById('add-contact'); d.open = !d.open">Add a contact</button>
 </header>
-<details class="add-job">
-  <summary>Add a contact</summary>
+<details id="add-contact" class="add-job">
+  <summary hidden></summary>
   <p class="hint">For someone you found yourself. Leave anything you don't know blank.
   A firm with no person yet is fine.</p>
   <form hx-post="/contacts" hx-target="#add-contact-result" hx-swap="innerHTML"
