@@ -77,15 +77,15 @@ def test_search_filters_by_company(client):
 
 def test_search_empty_query_returns_all(client):
     page = client.get("/feed", params={"q": ""}).text
-    assert "3 matches shown." in page
+    assert "3 matches." in page
 
 
 def test_search_escapes_like_wildcards(client):
     # '%' must match literally, not as a LIKE wildcard.
     page = client.get("/feed", params={"q": "100%"}).text
     assert "Fullstack Engineer" in page
-    assert "1 match shown." in page
-    assert "0 matches shown." in client.get("/feed", params={"q": "%%%"}).text
+    assert "1 match." in page
+    assert "0 matches." in client.get("/feed", params={"q": "%%%"}).text
 
 
 # --- manual jobs ---------------------------------------------------------------

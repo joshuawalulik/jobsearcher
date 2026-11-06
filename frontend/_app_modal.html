@@ -1,39 +1,45 @@
-{# Full application detail, loaded into #modal on card click. Expects
-   `a` (application dict with parsed breakdown). Read-only — editing
-   stays on the card; closes on the X, a click outside, or Escape. #}
-<div class="modal-overlay" onclick="if (event.target === this) this.remove()">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="{{ a.title }}">
-    <button class="modal-close" type="button" aria-label="Close"
-            onclick="this.closest('.modal-overlay').remove()">&times;</button>
-    <h2>{{ a.title }}</h2>
-    <p class="meta">
-      {{ a.company }}
-      {% if a.location %} · {{ a.location }}{% endif %}
-      {% if a.score is not none %} · score {{ '%g' % a.score }}{% endif %}
-    </p>
-    <p class="modal-status">
-      <span class="tracked">{{ a.lane | capitalize }}</span>
-      {% if a.applied_at %} · applied {{ a.applied_at[:10] }}{% endif %}
-      · tracked since {{ a.created_at[:10] }}
-      {% if a.url %} · <a href="{{ a.url }}" target="_blank" rel="noopener">Open job posting &nearr;</a>{% endif %}
-    </p>
-    <dl class="modal-details">
-      <dt>Resume version</dt><dd>{{ a.resume_version or '—' }}</dd>
-      <dt>Next action</dt>
-      <dd>{{ a.next_action or '—' }}{% if a.next_action_due %} <span class="due">due {{ a.next_action_due }}</span>{% endif %}</dd>
-      <dt>Notes</dt><dd>{{ a.notes or '—' }}</dd>
-    </dl>
+{# The tracker's slide-over: lane, details form, reply history, reasons and
+   the job description. Closes on the X or Escape. Expects `a`, `all_lanes`. #}
+<div class="modal-overlay">
+  <div class="modal" role="dialog" aria-label="{{ a.title }}" data-app="{{ a.id }}">
+    <button class="modal-close icon" type="button" aria-label="Close"
+            onclick="closeAppPanel()"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
+    <div class="p-head">
+      <h2 style="margin-top:0;padding-right:24px">{{ a.title }}</h2>
+      <p class="meta">
+        {{ a.company }}
+        {% if a.location %} · {{ a.location }}{% endif %}
+        {% if a.score is not none %} · score {{ '%g' % a.score }}{% endif %}
+        {% if a.applied_at %} · applied {{ a.applied_at[:10] }}{% endif %}
+        · tracked since {{ a.created_at[:10] }}
+      </p>
+      <div class="p-actions">
+        <select name="lane" aria-label="Lane" class="lane-select" style="flex:1"
+                hx-post="/applications/{{ a.id }}/lane" hx-target="#board" hx-swap="outerHTML">
+          {% for lane in all_lanes %}
+          <option value="{{ lane }}" {% if lane == a.lane %}selected{% endif %}>{{ lane | capitalize }}</option>
+          {% endfor %}
+        </select>
+        {% if a.lane in ('considering', 'skipped') %}
+        <button class="untrack" hx-post="/applications/{{ a.id }}/untrack"
+                hx-target="#board" hx-swap="outerHTML"
+                hx-confirm="Untrack this job? It goes back to being a plain match in the feed."
+                hx-on::after-request="closeAppPanel()">Untrack</button>
+        {% endif %}
+        {% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">Posting <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}
+      </div>
+    </div>
     {% if a.suggestions or a.email_replies %}
-    <div class="email-history">
-      <p class="hint">Email replies</p>
+    <section class="p-sec email-history">
+      <h3>Email replies</h3>
       <ul>
         {% for r in a.suggestions %}
         <li><span class="pending-pill">pending</span> <span class="kind-pill">{{ r.kind_label }}</span>
           {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
-          {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
+          {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}<br>
           <span class="suggestion-mail">{{ r.sender }} · {{ r.reason }}
-            {%- if r.suggested_lane %} &rarr; suggests {{ r.suggested_lane }}{% endif %}</span>
-          {% if r.evidence %}<br><q class="email-evidence">{{ r.evidence }}</q>{% endif %}
+            {%- if r.suggested_lane %} <svg class="i" aria-hidden="true"><use href="#arrow"/></svg> suggests {{ r.suggested_lane }}{% endif %}</span>
+          {% if r.evidence %}<q class="email-evidence">{{ r.evidence }}</q>{% endif %}
           {% if r.body %}
           <details class="email-body">
             <summary>Full email</summary>
@@ -43,10 +49,10 @@
         {% endfor %}
         {% for r in a.email_replies %}
         <li><span class="kind-pill">{{ r.kind_label }}</span> {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
-          {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
+          {%- if r.gmail_url %} · <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}<br>
           <span class="suggestion-mail">{{ r.sender }} · {{ r.reason }}
-            {%- if r.suggested_lane %} &rarr; moved to {{ r.suggested_lane }}{% endif %}</span>
-          {% if r.evidence %}<br><q class="email-evidence">{{ r.evidence }}</q>{% endif %}
+            {%- if r.suggested_lane %} <svg class="i" aria-hidden="true"><use href="#arrow"/></svg> moved to {{ r.suggested_lane }}{% endif %}</span>
+          {% if r.evidence %}<q class="email-evidence">{{ r.evidence }}</q>{% endif %}
           {% if r.body %}
           <details class="email-body">
             <summary>Full email</summary>
@@ -55,21 +61,42 @@
           {% endif %}</li>
         {% endfor %}
       </ul>
-    </div>
+    </section>
     {% endif %}
+    <section class="p-sec">
+      <h3>Details</h3>
+      {% if saved %}<p class="saved-note">Saved</p>{% endif %}
+      <form class="detail-form" hx-post="/applications/{{ a.id }}" hx-target="#modal" hx-swap="innerHTML">
+        <label>Next action
+          <input name="next_action" value="{{ a.next_action or '' }}">
+        </label>
+        <div class="two">
+          <label>Next action due
+            <input type="date" name="next_action_due" value="{{ a.next_action_due or '' }}">
+          </label>
+          <label>Applied on
+            <input type="date" name="applied_at" value="{{ (a.applied_at or '')[:10] }}">
+          </label>
+        </div>
+        <label>Resume version
+          <input name="resume_version" value="{{ a.resume_version or '' }}">
+        </label>
+        <label>Notes
+          <textarea name="notes" rows="4">{{ a.notes or '' }}</textarea>
+        </label>
+        <button class="save" type="submit">Save</button>
+      </form>
+    </section>
     {% if a.breakdown %}
-    <details class="breakdown" open>
-      <summary>Score breakdown</summary>
+    <section class="p-sec breakdown">
+      <h3>Score breakdown</h3>
       {% with bd = a.breakdown %}{% include "_breakdown.html" %}{% endwith %}
-    </details>
+    </section>
     {% endif %}
-    {% if a.description %}
-    <details class="breakdown jd" open>
-      <summary>Description</summary>
-      <div class="jd-text">{{ a.description }}</div>
-    </details>
-    {% else %}
-    <p class="hint">No saved job description.</p>
-    {% endif %}
+    <section class="p-sec">
+      <h3>Description</h3>
+      {% if a.description %}<div class="jd-text">{{ a.description }}</div>
+      {% else %}<p class="hint">No saved job description.</p>{% endif %}
+    </section>
   </div>
 </div>

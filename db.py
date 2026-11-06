@@ -11,6 +11,11 @@ DB_PATH = Path(__file__).parent / "data" / "jobs.db"
 CONVERSATIONS_DIR = DB_PATH.parent / "conversations"
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS app_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS companies (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -510,13 +515,25 @@ def _like_pattern(query: str) -> str:
     return f"%{escaped}%"
 
 
+_MATCH_WHERE = """
+        WHERE j.gate_failed = 0 AND j.dismissed = 0 AND j.score IS NOT NULL
+          AND c.ats_type != 'manual'
+        """
+_MATCH_SEARCH = r" AND (j.title LIKE ? ESCAPE '\' OR c.name LIKE ? ESCAPE '\')"
+
+
 def fetch_matches(
-    conn: sqlite3.Connection, query: str | None = None
+    conn: sqlite3.Connection,
+    query: str | None = None,
+    limit: int | None = None,
+    after: tuple[float, int] | None = None,
 ) -> list[sqlite3.Row]:
     """Gate-passing, non-dismissed jobs, best score first.
 
     query, if given, is a case-insensitive substring filter over the job
-    title and company name.
+    title and company name. limit caps the rows; after is the (score, id)
+    of the last row already shown, so paging resumes by position in the
+    ranking and a job dismissed meanwhile can't shift the next page.
     """
     sql = """
         SELECT j.id, j.title, j.location, j.url, j.posted_at, j.score,
@@ -527,14 +544,61 @@ def fetch_matches(
                (SELECT a.lane FROM applications a WHERE a.job_id = j.id)
                    AS tracked
         FROM jobs j JOIN companies c ON c.id = j.company_id
-        WHERE j.gate_failed = 0 AND j.dismissed = 0 AND j.score IS NOT NULL
-          AND c.ats_type != 'manual'
+        """ + _MATCH_WHERE
+    params: list = []
+    if query:
+        sql += _MATCH_SEARCH
+        params += [_like_pattern(query)] * 2
+    if after is not None:
+        sql += " AND (j.score < ? OR (j.score = ? AND j.id > ?))"
+        params += [after[0], after[0], after[1]]
+    sql += " ORDER BY j.score DESC, j.id"
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    return conn.execute(sql, params).fetchall()
+
+
+def fetch_job_detail(conn: sqlite3.Connection, job_id: int) -> sqlite3.Row | None:
+    """One job with what the feed report shows, whatever its feed status."""
+    return conn.execute(
         """
+        SELECT j.id, j.title, j.location, j.url, j.posted_at, j.score,
+               j.score_breakdown, j.description, c.name AS company,
+               (SELECT a.lane FROM applications a WHERE a.job_id = j.id)
+                   AS tracked
+        FROM jobs j JOIN companies c ON c.id = j.company_id
+        WHERE j.id = ?
+        """,
+        (job_id,),
+    ).fetchone()
+
+
+def get_state(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM app_state WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def set_state(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO app_state (key, value) VALUES (?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    conn.commit()
+
+
+def count_matches(conn: sqlite3.Connection, query: str | None = None) -> int:
+    """How many jobs fetch_matches would return without a limit."""
+    sql = (
+        "SELECT COUNT(*) FROM jobs j JOIN companies c ON c.id = j.company_id"
+        + _MATCH_WHERE
+    )
     params: list[str] = []
     if query:
-        sql += r" AND (j.title LIKE ? ESCAPE '\' OR c.name LIKE ? ESCAPE '\')"
+        sql += _MATCH_SEARCH
         params = [_like_pattern(query)] * 2
-    return conn.execute(sql + " ORDER BY j.score DESC, j.id", params).fetchall()
+    return conn.execute(sql, params).fetchone()[0]
 
 
 def dismiss_job(conn: sqlite3.Connection, job_id: int) -> bool:

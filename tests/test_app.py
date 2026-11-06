@@ -6,8 +6,10 @@ real profile.yaml via monkeypatching app.PROFILE_PATH.
 """
 
 import json
+import re
 import shutil
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -113,11 +115,53 @@ def test_feed_shows_matches_with_breakdown(client):
     assert "Software Engineer, Payments" in page
     assert "DISMISSED-ROW" not in page
     assert "REJECTED-ROW" not in page
-    # The full "why ranked here" rendering: components, multiplier, totals.
-    assert "title matches target &#39;Software Engineer&#39;" in page
-    assert "+5" in page and "-10" in page
-    assert "sparse description x0.85" in page
     assert "42.5" in page
+    # Rows stay light: the full reasons load into the report on click.
+    assert "sparse description x0.85" not in page
+    job_id = int(re.search(r'id="job-(\d+)"', page).group(1))
+    report = client.get(f"/jobs/{job_id}/detail").text
+    assert "Why ranked here" in report
+    assert "title matches target &#39;Software Engineer&#39;" in report
+    assert "+5" in report and "-10" in report
+    assert "sparse description x0.85" in report
+    assert "42.5" in report
+
+
+def test_job_detail_unknown_job_404s(client):
+    assert client.get("/jobs/999999/detail").status_code == 404
+
+
+def test_score_strip_buckets_points_on_one_ramp():
+    strip = app_module.score_strip({"components": [
+        {"category": "title", "points": 20},
+        {"category": "required", "points": 30},
+        {"category": "preferred", "points": 10},
+        {"category": "negative", "points": -5},
+        {"category": "experience", "points": -3},
+    ]})
+    assert (strip["title"], strip["required"], strip["preferred"], strip["penalty"]) == (20, 30, 10, 8)
+    assert strip["widths"]["required"] == 30  # 1 point is 1% of the track
+
+
+def test_score_strip_never_overflows_the_track():
+    strip = app_module.score_strip({"components": [
+        {"category": "required", "points": 150},
+        {"category": "title", "points": 50},
+    ]})
+    assert sum(strip["widths"].values()) == 100
+
+
+def test_score_strip_skips_breakdowns_without_categories():
+    assert app_module.score_strip(BREAKDOWN) is None
+    assert app_module.score_strip(None) is None
+
+
+@pytest.mark.parametrize("hour, minute, expected", [
+    (7, 0, "8:30"), (8, 30, "16:30"), (12, 0, "16:30"), (18, 40, "8:30"),
+])
+def test_next_sweep_label(hour, minute, expected):
+    now = datetime(2026, 11, 5, hour, minute)
+    assert app_module.next_sweep_label(now) == expected
 
 
 def test_dismiss_removes_job(client):
@@ -244,10 +288,10 @@ def test_rejected_filter_no_hits_message(client):
 
 def test_feed_shows_last_sweep_stamp(client):
     page = client.get("/").text
-    assert "Boards last swept" in page
+    assert "Swept " in page
     assert "min ago" in page  # seeded last_seen is datetime('now')
     # No recorded runs yet (pre-feature DB): stamp works without counts.
-    assert "Last sweep:" not in page
+    assert "passed gates" not in page
 
 
 def test_no_sweep_stamp_on_empty_db(client):
@@ -271,15 +315,22 @@ def test_sweep_button_sweeps_rescores_and_reports(client, monkeypatch):
     assert "Rescored 4 jobs" in page  # the rescore ran for real over the seed
     # The out-of-band stamp update carries the run summary and its errors.
     assert 'hx-swap-oob="true"' in page
-    assert "Last sweep: 2 companies" in page
+    assert "3 new from 2 companies" in page
     assert "board not found" in page
 
     # The run was recorded and shows on a fresh page load too.
     home = client.get("/").text
-    assert "Last sweep: 2 companies" in home
+    assert "3 new from 2 companies" in home
     assert "1 sweep error" in home
 
 
 def test_feed_has_sweep_button(client):
     page = client.get("/").text
     assert 'hx-post="/sweep"' in page
+
+
+def test_short_date_shows_the_year_only_when_it_differs():
+    this_year = datetime.now().year
+    assert app_module.short_date(f"{this_year}-11-04 10:00:00") == "Nov 4"
+    assert app_module.short_date(f"{this_year - 1}-01-28") == f"Jan 28, {this_year - 1}"
+    assert app_module.short_date(None) == ""

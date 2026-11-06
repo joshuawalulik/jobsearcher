@@ -1,9 +1,9 @@
 {# One contact, loaded into #modal. Forms post back here, so refusals and
-   warnings show inline. Closes on the X, a click outside, or Escape. #}
-<div class="modal-overlay" onclick="if (event.target === this) this.remove()">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="{{ c.name or c.company }}">
-    <button class="modal-close" type="button" aria-label="Close"
-            onclick="this.closest('.modal-overlay').remove()">&times;</button>
+   warnings show inline. Closes on the X or Escape. #}
+<div class="modal-overlay">
+  <div class="modal padded" role="dialog" aria-label="{{ c.name or c.company }}">
+    <button class="modal-close icon" type="button" aria-label="Close"
+            onclick="this.closest('.modal-overlay').remove()"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
     <h2>{{ c.name or c.company }}</h2>
     <p class="meta">
       {{ c.company or 'No company' }} · {{ c.track | replace('_', ' ') | capitalize }}
@@ -23,14 +23,14 @@
 
     <dl class="modal-details">
       <dt>Email</dt><dd>{{ c.email or '—' }}</dd>
-      <dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">Open profile &nearr;</a>{% else %}—{% endif %}</dd>
+      <dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">Open profile <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% else %}—{% endif %}</dd>
       <dt>Location</dt><dd>{{ c.location or '—' }}</dd>
       <dt>NYC</dt><dd>{{ c.nyc_relevance or '—' }}</dd>
       <dt>Ask</dt><dd>{{ c.ask or '—' }}</dd>
       <dt>Notes</dt><dd>{{ (c.notes | link_conversations) if c.notes else '—' }}</dd>
     </dl>
     {% if c.gmail_draft_id %}
-    <p class="modal-status"><a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">Open Gmail Drafts &nearr;</a></p>
+    <p class="modal-status"><a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">Open Gmail Drafts <svg class="i" aria-hidden="true"><use href="#out"/></svg></a></p>
     {% endif %}
 
     {% if c.peer_history %}
@@ -125,7 +125,7 @@
     </details>
 
     <div class="contact-section">
-      <button class="dismiss" type="button" hx-post="/contacts/{{ c.contact_id }}/remove"
+      <button class="danger sm" type="button" hx-post="/contacts/{{ c.contact_id }}/remove"
               hx-target="#modal" hx-swap="innerHTML"
               hx-confirm="Remove {{ c.name or c.company or 'this contact' }}? They'll disappear from every list, count and tool, and a re-import won't add them back.">Remove</button>
     </div>

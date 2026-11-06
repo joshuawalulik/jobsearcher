@@ -9,7 +9,7 @@
     <ul>
       {% for r in ignored %}
       <li>{{ (r.received_at or '')[:10] }} &middot; {{ r.subject or '(no subject)' }}
-        {%- if r.gmail_url %} &middot; <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}<br>
+        {%- if r.gmail_url %} &middot; <a href="{{ r.gmail_url }}" target="_blank" rel="noopener">Open in Gmail <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}<br>
         <span class="suggestion-mail">{{ r.sender }} &middot; {{ r.reason }}</span></li>
       {% endfor %}
     </ul>

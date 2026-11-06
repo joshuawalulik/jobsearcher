@@ -1,0 +1,33 @@
+{# The report beside the feed: one job's score, reasons and description. #}
+<div class="p-head" data-job="{{ job.id }}">
+  <div class="bigscore">{{ '%g' % job.score }}</div>
+  <h2>{{ job.title }}</h2>
+  <p class="meta">
+    {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
+    {%- if job.posted_at %} · posted {{ job.posted_at | short_date }}{% endif %} · No. {{ job.id }}
+    {% if job.contact_badge %}<a class="contact-badge{% if job.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ job.company | urlencode }}">{{ job.contact_badge }}</a>{% endif %}
+  </p>
+  <div class="p-actions">
+    {% if job.tracked %}
+    <a class="tracked {{ job.tracked }}" style="margin-left:0" href="/tracker">{{ job.tracked }}</a>
+    {% else %}
+    <button class="primary sm" type="button"
+            onclick="document.querySelector('#job-{{ job.id }} .track').click()">Track</button>
+    {% endif %}
+    <button class="sm" hx-post="/jobs/{{ job.id }}/dismiss" hx-swap="none"
+            hx-on::after-request="dropRow({{ job.id }})">Dismiss</button>
+    {% if job.url %}<a href="{{ job.url }}" target="_blank" rel="noopener">Posting <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}
+  </div>
+</div>
+{% if job.breakdown %}
+<section class="p-sec breakdown">
+  <h3>Why ranked here</h3>
+  {% with bd = job.breakdown %}{% include "_breakdown.html" %}{% endwith %}
+</section>
+{% endif %}
+{% if job.description %}
+<section class="p-sec">
+  <h3>Description</h3>
+  <div class="jd-text">{{ job.description }}</div>
+</section>
+{% endif %}

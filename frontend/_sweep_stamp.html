@@ -2,25 +2,22 @@
    response can replace it out-of-band by id. #}
 <div id="sweep-stamp"{% if oob %} hx-swap-oob="true"{% endif %}>
   {% if last_sweep %}
-  <p class="hint sweep-stamp">
-    Boards last swept {{ last_sweep.local }} ({{ last_sweep.ago }}) ·
-    scheduled daily at 8:30 &amp; 16:30.
-    {%- if last_run %}
-    Last sweep: {{ last_run.companies }} companies,
-    {{ last_run.jobs_seen }} jobs ({{ last_run.jobs_new }} new)
-    {%- if last_run.rescore_total is not none %} ·
-    rescored {{ last_run.rescore_total }}: {{ last_run.rescore_passed }} passed gates,
-    {{ last_run.rescore_rejected }} rejected
-    {%- endif %}.
-    {%- endif %}
-  </p>
-  {% if last_run and last_run.errors %}
-  <details class="hint sweep-errors">
-    <summary>{{ last_run.errors | length }} sweep error{{ 's' if last_run.errors | length != 1 }}</summary>
-    <ul>
-      {% for error in last_run.errors %}<li>{{ error }}</li>{% endfor %}
-    </ul>
-  </details>
-  {% endif %}
+  <div class="stamp sweep-stamp">
+    <span><span class="live-dot"></span>Swept {{ last_sweep.ago }}</span>
+    {% if last_run %}
+    <span>{{ "{:,}".format(last_run.jobs_new) }} new from {{ last_run.companies }} companies</span>
+    {% if last_run.rescore_total is not none %}<span>{{ "{:,}".format(last_run.rescore_passed) }} passed gates</span>{% endif %}
+    {% endif %}
+    <span>Next sweep {{ next_sweep }}</span>
+    {% if last_run and last_run.errors %}
+    <details class="sweep-errors">
+      <summary>{{ last_run.errors | length }} sweep error{{ 's' if last_run.errors | length != 1 }}</summary>
+      <ul>
+        {% for error in last_run.errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+    <span class="legend"><i class="st-title"></i>Title <i class="st-required"></i>Required <i class="st-preferred"></i>Preferred <i class="st-penalty"></i>Penalty</span>
+  </div>
   {% endif %}
 </div>

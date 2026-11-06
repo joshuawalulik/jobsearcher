@@ -2,6 +2,7 @@
 {% set active = 'dismissed' %}
 {% block title %}Dismissed — Job Search Tool{% endblock %}
 {% block content %}
+<div class="page">
 <header class="page-head">
   <h1>Recently dismissed</h1>
 </header>
@@ -9,13 +10,13 @@
 Restore puts a job back in the feed{% if jobs %} (a job that has since failed a
 gate goes to Rejected instead){% endif %}.</p>
 {% if jobs %}
-<section class="panel">
+<section class="panel" style="margin-top:12px">
   <table>
     <thead><tr><th>Title</th><th>Company</th><th>Location</th><th class="num">Score</th><th>Dismissed</th><th></th></tr></thead>
     <tbody>
       {% for job in jobs %}
       <tr>
-        <td>{% if job.url %}<a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>{% else %}{{ job.title }}{% endif %}</td>
+        <td class="tt">{% if job.url %}<a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>{% else %}{{ job.title }}{% endif %}</td>
         <td>{{ job.company }}</td>
         <td>{{ job.location or '—' }}</td>
         <td class="num">{% if job.score is not none %}{{ '%g' % job.score }}{% else %}—{% endif %}</td>
@@ -32,4 +33,5 @@ gate goes to Rejected instead){% endif %}.</p>
 {% else %}
 <p class="empty">Nothing dismissed.</p>
 {% endif %}
+</div>
 {% endblock %}

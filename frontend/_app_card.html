@@ -1,87 +1,33 @@
-<article class="card app-card" hx-get="/applications/{{ a.id }}/modal"
+{# A resting tracker card; everything else lives in the slide-over. #}
+<article id="app-{{ a.id }}" class="card app-card" hx-get="/applications/{{ a.id }}/modal"
          hx-target="#modal" hx-swap="innerHTML"
          hx-trigger="click[opensAppModal(event)]">
   <h3>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>{% else %}{{ a.title }}{% endif %}</h3>
   <p class="meta">
-    {{ a.company }}
-    {% if a.score is not none %} · score {{ '%g' % a.score }}{% endif %}
-    {% if a.applied_at %} · applied {{ a.applied_at[:10] }}{% endif %}
+    <span>{{ a.company }}</span>
+    {% if a.score is not none %}<span class="num">{{ '%g' % a.score }}</span>{% endif %}
+    {% if a.applied_at %}<span>applied {{ a.applied_at | short_date }}</span>{% endif %}
     {% if a.contact_badge %}<a class="contact-badge{% if a.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ a.company | urlencode }}">{{ a.contact_badge }}</a>{% endif %}
   </p>
   {% if a.next_action %}
-  <p class="next-action">&rarr; {{ a.next_action }}{% if a.next_action_due %} <span class="due">due {{ a.next_action_due }}</span>{% endif %}</p>
+  <p class="next-action"><svg class="i" aria-hidden="true"><use href="#arrow"/></svg> {{ a.next_action }}{% if a.next_action_due %} <span class="due">due {{ a.next_action_due | short_date }}</span>{% endif %}</p>
   {% endif %}
   {% for s in a.suggestions or [] %}
   <div class="email-suggestion">
-    <p>&#9993; <span class="kind-pill">{{ s.kind_label }}</span>
-      {% if s.suggested_lane %}suggests <strong>{{ s.suggested_lane | capitalize }}</strong> &middot; {% endif %}
-      {{ s.reason }}<br>
-      {% if s.evidence %}<q class="email-evidence">{{ s.evidence }}</q><br>{% endif %}
-      <span class="suggestion-mail">{{ s.sender }} · {{ s.subject or '(no subject)' }}{% if s.received_at %} · {{ s.received_at[:10] }}{% endif %}
-        {%- if s.gmail_url %} · <a href="{{ s.gmail_url }}" target="_blank" rel="noopener">Open in Gmail &nearr;</a>{% endif %}</span>
+    <p><span class="lead"><span class="kind-pill">{{ s.kind_label }}</span>
+      {% if s.suggested_lane %}Suggests {{ s.suggested_lane | capitalize }}{% else %}Reply received{% endif %}</span>
+      {% if s.evidence %}<q class="email-evidence">{{ s.evidence }}</q>{% endif %}
+      <span class="suggestion-mail">{{ s.reason }} · {{ s.sender }} · {{ s.subject or "(no subject)" }}{% if s.received_at %} · {{ s.received_at[:10] }}{% endif %}
+        {%- if s.gmail_url %} · <a href="{{ s.gmail_url }}" target="_blank" rel="noopener">Open in Gmail <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}</span>
     </p>
-    {% if s.body %}
-    <details class="email-body">
-      <summary>Full email</summary>
-      <pre>{{ s.body }}</pre>
-    </details>
-    {% endif %}
-    <button class="accept" hx-post="/email/suggestions/{{ s.id }}/accept"
-            hx-target="#board" hx-swap="outerHTML">
-      {{- ('Move to ' ~ s.suggested_lane) if s.suggested_lane else 'Save reply' -}}
-    </button>
-    <button hx-post="/email/suggestions/{{ s.id }}/dismiss"
-            hx-target="#board" hx-swap="outerHTML">Dismiss</button>
+    <div class="acts">
+      <button class="accept" hx-post="/email/suggestions/{{ s.id }}/accept"
+              hx-target="#board" hx-swap="outerHTML">
+        {{- ('Move to ' ~ s.suggested_lane) if s.suggested_lane else 'Save reply' -}}
+      </button>
+      <button hx-post="/email/suggestions/{{ s.id }}/dismiss"
+              hx-target="#board" hx-swap="outerHTML">Dismiss</button>
+    </div>
   </div>
   {% endfor %}
-  {% if a.breakdown %}
-  <details class="breakdown">
-    <summary>Score breakdown</summary>
-    {% with bd = a.breakdown %}{% include "_breakdown.html" %}{% endwith %}
-  </details>
-  {% endif %}
-  <select class="lane-select" name="lane" hx-post="/applications/{{ a.id }}/lane"
-          hx-target="#board" hx-swap="outerHTML">
-    {% for lane in all_lanes %}
-    <option value="{{ lane }}" {% if lane == a.lane %}selected{% endif %}>{{ lane }}</option>
-    {% endfor %}
-  </select>
-  {% if a.lane in ('considering', 'skipped') %}
-  <button class="untrack" hx-post="/applications/{{ a.id }}/untrack"
-          hx-target="#board" hx-swap="outerHTML"
-          hx-confirm="Untrack this job? It goes back to being a plain match in the feed.">Untrack</button>
-  {% endif %}
-  <details class="app-details" {% if saved %}open{% endif %}>
-    <summary>Details{% if saved %} — saved{% endif %}</summary>
-    {% if a.email_replies %}
-    <div class="email-history">
-      <p class="hint">Email replies</p>
-      <ul>
-        {% for r in a.email_replies %}
-        <li><span class="kind-pill">{{ r.kind_label }}</span> {{ (r.received_at or '')[:10] }} · {{ r.subject or '(no subject)' }}
-          {%- if r.suggested_lane %} <span class="suggestion-mail">&rarr; {{ r.suggested_lane }}</span>{% endif %}
-          {%- if r.gmail_url %} <a href="{{ r.gmail_url }}" target="_blank" rel="noopener" title="Open in Gmail">&nearr;</a>{% endif %}</li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-    <form hx-post="/applications/{{ a.id }}" hx-target="closest article" hx-swap="outerHTML">
-      <label>Notes
-        <textarea name="notes" rows="3">{{ a.notes or '' }}</textarea>
-      </label>
-      <label>Resume version
-        <input name="resume_version" value="{{ a.resume_version or '' }}">
-      </label>
-      <label>Next action
-        <input name="next_action" value="{{ a.next_action or '' }}">
-      </label>
-      <label>Next action due
-        <input type="date" name="next_action_due" value="{{ a.next_action_due or '' }}">
-      </label>
-      <label>Applied on
-        <input type="date" name="applied_at" value="{{ (a.applied_at or '')[:10] }}">
-      </label>
-      <button class="save" type="submit">Save</button>
-    </form>
-  </details>
 </article>
