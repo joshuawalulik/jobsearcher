@@ -1,8 +1,7 @@
 <div id="feed">
-  <p class="status">
-    {% if summary %}<strong>{{ summary }}</strong> {% endif %}
-    {{ '{:,}'.format(total) }} match{{ 'es' if total != 1 }}.
-  </p>
+  {% if summary %}<p class="status"><strong>{{ summary }}</strong></p>{% endif %}
+  {# The count sits beside the heading; refreshes update it out-of-band. #}
+  {% if not full_page %}{% with oob = true %}{% include "_match_count.html" %}{% endwith %}{% endif %}
   {% include "_feed_rows.html" %}
   {% if jobs %}
   {# Open on the first job still to decide, not one already tracked. #}

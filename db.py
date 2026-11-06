@@ -304,6 +304,16 @@ def init_db(conn: sqlite3.Connection) -> None:
     if "new_message" not in contact_columns:
         conn.execute("ALTER TABLE contacts ADD COLUMN new_message TEXT")
         conn.commit()
+    # Long descriptions sit before these columns in every row, so a table scan
+    # walks about 330 MB; these keep the feed and its header off the rows.
+    job_columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
+    if {"score", "gate_failed", "last_seen", "company_id"} <= job_columns:
+        conn.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_jobs_feed
+                ON jobs(score DESC, id, company_id)
+                WHERE gate_failed = 0 AND dismissed = 0 AND score IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_jobs_last_seen ON jobs(last_seen, company_id);
+        """)
 
 
 def _migrate_companies_check(conn: sqlite3.Connection) -> None:

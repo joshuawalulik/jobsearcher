@@ -6,6 +6,7 @@
   <div class="feed-col">
     <header class="page-head">
       <h1>Matches</h1>
+      {% include "_match_count.html" %}
       <input id="q" class="search" type="search" name="q" value="{{ q or '' }}"
              placeholder="Search title or company&hellip;" autocomplete="off" aria-label="Search title or company"
              hx-get="/feed" hx-target="#feed" hx-swap="outerHTML"
