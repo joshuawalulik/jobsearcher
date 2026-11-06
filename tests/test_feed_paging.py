@@ -136,3 +136,27 @@ def test_breakdown_lists_matched_and_missing_keywords_as_chips(conn, client):
     assert '<span class="chip on">rest</span>' in page
     assert ">graphql</span>" in page
     assert "+12" in page
+
+
+def test_to_decide_hides_tracked_jobs_and_all_shows_them(conn, client):
+    ids = seed_jobs(conn, 3)
+    db.create_application(conn, ids[0])
+    page = client.get("/").text
+    assert f'id="job-{ids[0]}"' not in page
+    assert f'id="job-{ids[1]}"' in page
+    assert "To decide <span>2</span>" in page and "All <span>3</span>" in page
+    assert f'id="job-{ids[0]}"' in client.get("/?view=all").text
+
+
+def test_paging_and_refresh_keep_the_view(conn, client):
+    seed_jobs(conn, FEED_PAGE + 3)
+    assert "&amp;view=all" in client.get("/feed", params={"view": "all"}).text \
+        or "&view=all" in client.get("/feed", params={"view": "all"}).text
+    assert 'name="view" value="all"' in client.get("/feed", params={"view": "all"}).text
+
+
+def test_undecided_count_matches_the_undecided_walk(conn):
+    ids = seed_jobs(conn, 6)
+    db.create_application(conn, ids[2])
+    assert db.count_matches(conn, undecided=True) == 5
+    assert len(db.fetch_matches(conn, undecided=True)) == 5
