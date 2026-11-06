@@ -91,14 +91,14 @@ def test_track_unknown_job_404s(client):
 def test_feed_shows_track_button_then_lane_pill(client):
     assert "Track</button>" in client.get("/").text
     app_id = track(client)
-    page = client.get("/").text
+    page = client.get("/?view=all").text
     # The pill mirrors the tracker lane, starting at Considering.
     assert ">considering</a>" in page
     # The tracked card no longer offers a Track button; the untracked one does.
     assert page.count("Track</button>") == 1
     # Moving lanes on the tracker updates the feed pill too.
     client.post(f"/applications/{app_id}/lane", data={"lane": "applied"})
-    assert ">applied</a>" in client.get("/").text
+    assert ">applied</a>" in client.get("/?view=all").text
 
 
 def test_application_modal_shows_jd_breakdown_details_and_status(client):

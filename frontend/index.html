@@ -9,14 +9,14 @@
       {% include "_match_count.html" %}
       <input id="q" class="search" type="search" name="q" value="{{ q or '' }}"
              placeholder="Search title or company&hellip;" autocomplete="off" aria-label="Search title or company"
-             hx-get="/feed" hx-target="#feed" hx-swap="outerHTML"
+             hx-get="/feed" hx-include="#view" hx-target="#feed" hx-swap="outerHTML"
              hx-trigger="input changed delay:300ms, search">
       <span class="spacer"></span>
       <span id="sweep-ind" class="htmx-indicator hint">Sweeping boards&hellip;</span>
       <button class="rescore" hx-post="/rescore" hx-target="#feed" hx-swap="outerHTML"
-              hx-include="#q" hx-disabled-elt="this">Re-score all jobs</button>
+              hx-include="#q, #view" hx-disabled-elt="this">Re-score all jobs</button>
       <button class="sweep" hx-post="/sweep" hx-target="#feed" hx-swap="outerHTML"
-              hx-include="#q" hx-disabled-elt="this"
+              hx-include="#q, #view" hx-disabled-elt="this"
               hx-indicator="#sweep-ind">Sweep boards</button>
     </header>
     {% include "_sweep_stamp.html" %}

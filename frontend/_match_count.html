@@ -1,1 +1,10 @@
-<span id="match-count" class="count-note"{% if oob %} hx-swap-oob="true"{% endif %}>{{ '{:,}'.format(total) }}</span>
+{# The view switch beside the heading. Refreshes update it out-of-band. #}
+<span id="match-count" class="count-note"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <input id="view" type="hidden" name="view" value="{{ view }}">
+  <span class="view-tabs" role="group" aria-label="Which jobs to show">
+    <button type="button" class="view-tab{% if view != 'all' %} active{% endif %}" {% if view != 'all' %}aria-pressed="true"{% endif %}
+            hx-get="/feed?view=decide" hx-include="#q" hx-target="#feed" hx-swap="outerHTML">To decide <span>{{ '{:,}'.format(to_decide) }}</span></button>
+    <button type="button" class="view-tab{% if view == 'all' %} active{% endif %}" {% if view == 'all' %}aria-pressed="true"{% endif %}
+            hx-get="/feed?view=all" hx-include="#q" hx-target="#feed" hx-swap="outerHTML">All <span>{{ '{:,}'.format(total) }}</span></button>
+  </span>
+</span>

@@ -532,11 +532,15 @@ _MATCH_WHERE = """
 _MATCH_SEARCH = r" AND (j.title LIKE ? ESCAPE '\' OR c.name LIKE ? ESCAPE '\')"
 
 
+_MATCH_UNDECIDED = " AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.job_id = j.id)"
+
+
 def fetch_matches(
     conn: sqlite3.Connection,
     query: str | None = None,
     limit: int | None = None,
     after: tuple[float, int] | None = None,
+    undecided: bool = False,
 ) -> list[sqlite3.Row]:
     """Gate-passing, non-dismissed jobs, best score first.
 
@@ -544,6 +548,7 @@ def fetch_matches(
     title and company name. limit caps the rows; after is the (score, id)
     of the last row already shown, so paging resumes by position in the
     ranking and a job dismissed meanwhile can't shift the next page.
+    undecided leaves out jobs already tracked.
     """
     sql = """
         SELECT j.id, j.title, j.location, j.url, j.posted_at, j.score,
@@ -559,6 +564,8 @@ def fetch_matches(
     if query:
         sql += _MATCH_SEARCH
         params += [_like_pattern(query)] * 2
+    if undecided:
+        sql += _MATCH_UNDECIDED
     if after is not None:
         sql += " AND (j.score < ? OR (j.score = ? AND j.id > ?))"
         params += [after[0], after[0], after[1]]
@@ -598,7 +605,9 @@ def set_state(conn: sqlite3.Connection, key: str, value: str) -> None:
     conn.commit()
 
 
-def count_matches(conn: sqlite3.Connection, query: str | None = None) -> int:
+def count_matches(
+    conn: sqlite3.Connection, query: str | None = None, undecided: bool = False
+) -> int:
     """How many jobs fetch_matches would return without a limit."""
     sql = (
         "SELECT COUNT(*) FROM jobs j JOIN companies c ON c.id = j.company_id"
@@ -608,6 +617,8 @@ def count_matches(conn: sqlite3.Connection, query: str | None = None) -> int:
     if query:
         sql += _MATCH_SEARCH
         params = [_like_pattern(query)] * 2
+    if undecided:
+        sql += _MATCH_UNDECIDED
     return conn.execute(sql, params).fetchone()[0]
 
 

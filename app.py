@@ -35,6 +35,7 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 PROFILE_PATH = profile_io.PROFILE_PATH
 REJECTED_ROWS_PER_GATE = 100
 SWEEP_TIMES = ((8 * 60 + 30, "8:30"), (16 * 60 + 30, "16:30"))  # launchd schedule
+VIEW_DECIDE, VIEW_ALL = "decide", "all"  # Matches views; decide is the default
 FEED_PAGE = 50  # rows per load; paging mechanics, not a preference
 DISMISSED_ROWS = 100
 
@@ -142,11 +143,16 @@ def _attach_contact_badges(conn, rows: list[dict]) -> list[dict]:
 
 
 def _matches(
-    conn, q: str | None = None, after: tuple[float, int] | None = None
+    conn,
+    q: str | None = None,
+    after: tuple[float, int] | None = None,
+    view: str = VIEW_DECIDE,
 ) -> list[dict]:
     """One page of the feed, with its badges."""
     jobs = []
-    for row in db.fetch_matches(conn, q, limit=FEED_PAGE, after=after):
+    for row in db.fetch_matches(
+        conn, q, limit=FEED_PAGE, after=after, undecided=view != VIEW_ALL
+    ):
         job = dict(row)
         job.pop("description")  # the report loads it on click
         breakdown = json.loads(job.pop("score_breakdown") or "null")
@@ -187,11 +193,15 @@ def next_sweep_label(now: datetime) -> str:
     return next((label for at, label in SWEEP_TIMES if at > minutes), SWEEP_TIMES[0][1])
 
 
-def _feed_context(conn, q: str = "", summary: str | None = None) -> dict:
+def _feed_context(
+    conn, q: str = "", summary: str | None = None, view: str = VIEW_DECIDE
+) -> dict:
     """First page of the feed plus what its header and paging need."""
     return {
-        "jobs": _matches(conn, q),
+        "jobs": _matches(conn, q, view=view),
         "total": db.count_matches(conn, q),
+        "to_decide": db.count_matches(conn, q, undecided=True),
+        "view": view,
         "page_size": FEED_PAGE,
         "q": q,
         "summary": summary,
@@ -263,18 +273,24 @@ def _last_run(conn) -> dict | None:
 
 
 @app.get("/", response_class=HTMLResponse)
-def matches_feed(request: Request, q: str = "", conn=Depends(get_db)):
+def matches_feed(
+    request: Request, q: str = "", view: str = VIEW_DECIDE, conn=Depends(get_db)
+):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {**_feed_context(conn, q), **_sweep_context(conn), "full_page": True},
+        {**_feed_context(conn, q, view=view), **_sweep_context(conn), "full_page": True},
     )
 
 
 @app.get("/feed", response_class=HTMLResponse)
-def feed_partial(request: Request, q: str = "", conn=Depends(get_db)):
+def feed_partial(
+    request: Request, q: str = "", view: str = VIEW_DECIDE, conn=Depends(get_db)
+):
     """HTMX partial for the search box (and anything else refreshing the feed)."""
-    return templates.TemplateResponse(request, "_feed.html", _feed_context(conn, q))
+    return templates.TemplateResponse(
+        request, "_feed.html", _feed_context(conn, q, view=view)
+    )
 
 
 @app.get("/feed/more", response_class=HTMLResponse)
@@ -283,6 +299,7 @@ def feed_more(
     after_score: float,
     after_id: int,
     q: str = "",
+    view: str = VIEW_DECIDE,
     conn=Depends(get_db),
 ):
     """The next page of rows, fetched when the end of the list scrolls into view."""
@@ -290,9 +307,10 @@ def feed_more(
         request,
         "_feed_rows.html",
         {
-            "jobs": _matches(conn, q, after=(after_score, after_id)),
+            "jobs": _matches(conn, q, after=(after_score, after_id), view=view),
             "page_size": FEED_PAGE,
             "q": q,
+            "view": view,
         },
     )
 
@@ -340,11 +358,12 @@ async def rescore(request: Request, conn=Depends(get_db)):
     summary = rescore_all(
         conn, load_profile(PROFILE_PATH), now=datetime.now(timezone.utc)
     )
-    q = str((await request.form()).get("q", ""))  # keep the active search filter
+    form = await request.form()  # keep the active search and view
+    q, view = str(form.get("q", "")), str(form.get("view", VIEW_DECIDE))
     return templates.TemplateResponse(
         request,
         "_feed.html",
-        _feed_context(conn, q, _rescore_summary(summary)),
+        _feed_context(conn, q, _rescore_summary(summary), view),
     )
 
 
@@ -365,11 +384,12 @@ async def sweep_now(request: Request, conn=Depends(get_db)):
     if swept["errors"]:
         message += f", {len(swept['errors'])} error{'s' if len(swept['errors']) != 1 else ''}"
     message += ". " + _rescore_summary(summary["rescore"])
-    q = str((await request.form()).get("q", ""))  # keep the active search filter
+    form = await request.form()  # keep the active search and view
+    q, view = str(form.get("q", "")), str(form.get("view", VIEW_DECIDE))
     return templates.TemplateResponse(
         request,
         "_sweep_result.html",
-        {**_feed_context(conn, q, message),
+        {**_feed_context(conn, q, message, view),
          **_sweep_context(conn)},
     )
 
