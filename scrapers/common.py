@@ -47,18 +47,39 @@ def write_cache(ats_type: str, slug: str, raw) -> Path:
     return path
 
 
+_BLOCK_TAGS = {"div", "br", "ul", "ol", "tr", "table", "section", "article"}
+_PARAGRAPH_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote"}
+
+
 class _TextExtractor(HTMLParser):
+    """Collects text, keeping line breaks where block tags were."""
+
     def __init__(self):
         super().__init__()
         self.parts: list[str] = []
 
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag == "li":
+            self.parts.append("\n\u2022 ")
+        elif tag in _PARAGRAPH_TAGS:
+            self.parts.append("\n\n")
+        elif tag in _BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _PARAGRAPH_TAGS:
+            self.parts.append("\n\n")
+        elif tag in _BLOCK_TAGS:
+            self.parts.append("\n")
+
     def handle_data(self, data: str) -> None:
-        self.parts.append(data)
+        self.parts.append(" ".join(data.split()) if data.strip() else " ")
 
 
 def html_to_text(html_str: str | None) -> str | None:
-    """Strip tags, decode entities once, collapse whitespace. None/empty → None.
+    """Strip tags and decode entities once, keeping paragraphs and bullets.
 
+    Runs of spaces collapse and blank lines stay single. None/empty → None.
     Input must be ordinary HTML. Entity-escaped HTML (Greenhouse `content`)
     needs one html.unescape() by the caller first — doing it here would
     double-unescape and delete literal <angle-bracketed> text from
@@ -68,8 +89,11 @@ def html_to_text(html_str: str | None) -> str | None:
         return None
     parser = _TextExtractor()
     parser.feed(html_str)
-    text = " ".join(" ".join(parser.parts).split())
-    return text or None
+    lines = [" ".join(line.split()) for line in " ".join(parser.parts).split("\n")]
+    text = "\n".join(lines)
+    while "\n\n\n" in text:
+        text = text.replace("\n\n\n", "\n\n")
+    return text.strip() or None
 
 
 def iso_to_utc_string(value: str | None) -> str | None:
