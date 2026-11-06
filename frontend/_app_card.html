@@ -1,11 +1,11 @@
 {# A resting tracker card; everything else lives in the slide-over. #}
-<article id="app-{{ a.id }}" class="card app-card" hx-get="/applications/{{ a.id }}/modal"
+<article id="app-{{ a.id }}" class="card app-card" tabindex="0" hx-get="/applications/{{ a.id }}/modal"
          hx-target="#modal" hx-swap="innerHTML"
-         hx-trigger="click[opensAppModal(event)]">
+         hx-trigger="click[opensAppModal(event)], keyup[key=='Enter' && opensAppModal(event)]">
   <h3>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>{% else %}{{ a.title }}{% endif %}</h3>
   <p class="meta">
     <span>{{ a.company }}</span>
-    {% if a.score is not none %}<span class="num">{{ '%g' % a.score }}</span>{% endif %}
+    {% if a.score is not none %}<span class="num">{{ '%.0f' % a.score }}</span>{% endif %}
     {% if a.applied_at %}<span>applied {{ a.applied_at | short_date }}</span>{% endif %}
     {% if a.contact_badge %}<a class="contact-badge{% if a.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ a.company | urlencode }}">{{ a.contact_badge }}</a>{% endif %}
   </p>

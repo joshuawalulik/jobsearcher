@@ -14,7 +14,7 @@
       <p class="lane-empty">{% if lane.name == 'interviewing' %}Moves here when you accept an email suggestion or change a card's lane.{% else %}Nothing here yet.{% endif %}</p>
     {% endfor %}
     {% if lane.apps | length > 12 %}
-    <details class="lane-more">
+    <details class="lane-more" data-lane="{{ lane.name }}">
       <summary>Show {{ lane.apps | length - 12 }} more</summary>
       {% for a in lane.apps[12:] %}{% include "_app_card.html" %}{% endfor %}
     </details>

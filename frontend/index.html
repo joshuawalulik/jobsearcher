@@ -39,6 +39,9 @@
     });
     var row = shown && document.getElementById("job-" + shown.dataset.job);
     if (row) row.classList.add("sel");
+    // Narrow screens stack the report under the list, so take the click to it.
+    var cause = evt.detail.requestConfig && evt.detail.requestConfig.triggeringEvent;
+    if (cause && window.innerWidth <= 1050) evt.detail.target.scrollIntoView();
   });
   // Dismissing drops the row and moves the report on to the next job.
   function dropRow(jobId) {
@@ -52,10 +55,11 @@
     else document.getElementById("report").innerHTML = "";
   }
   // Tracking from the row refreshes the report if it shows that job.
-  function refreshReport(jobId) {
+  document.addEventListener("jobTracked", function (evt) {
+    var jobId = evt.detail.value;
     if (document.querySelector('#report [data-job="' + jobId + '"]')) {
       htmx.ajax("GET", "/jobs/" + jobId + "/detail", "#report");
     }
-  }
+  });
 </script>
 {% endblock %}

@@ -2,11 +2,11 @@
 <article id="job-{{ job.id }}" class="job-row{% if job.tracked %} decided{% endif %}{% if job.score < 50 %} low{% endif %}" tabindex="0"
          hx-get="/jobs/{{ job.id }}/detail" hx-target="#report" hx-swap="innerHTML"
          hx-trigger="click[opensJob(event)], keyup[key=='Enter' && opensJob(event)]">
-  <span class="sc">{{ '%g' % job.score }}</span>
+  <span class="sc">{{ '%.0f' % job.score }}</span>
   <div>
     <h2>{{ job.title }}</h2>
     <p class="meta">
-      {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %} · No. {{ job.id }}
+      {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
       {% if job.contact_badge %} <a class="contact-badge{% if job.contact_badge == 'Referral path' %} path{% endif %}" href="/contacts?q={{ job.company | urlencode }}">{{ job.contact_badge }}</a>{% endif %}
     </p>
   </div>
@@ -22,8 +22,7 @@
     {% if job.tracked %}
     <a class="tracked {{ job.tracked }}" href="/tracker">{{ job.tracked }}</a>
     {% else %}
-    <button class="track" hx-post="/jobs/{{ job.id }}/track" hx-swap="outerHTML"
-            hx-on::after-request="refreshReport({{ job.id }})">Track</button>
+    <button class="track" hx-post="/jobs/{{ job.id }}/track" hx-target="this" hx-swap="outerHTML">Track</button>
     {% endif %}
   </span>
   <button class="icon dismiss" aria-label="Dismiss" title="Dismiss" hx-post="/jobs/{{ job.id }}/dismiss"

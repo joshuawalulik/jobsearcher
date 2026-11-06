@@ -8,6 +8,7 @@
   {% set first = (jobs | rejectattr('tracked') | first) or jobs[0] %}
   <span hx-get="/jobs/{{ first.id }}/detail" hx-target="#report" hx-swap="innerHTML" hx-trigger="load"></span>
   {% else %}
-  <p class="empty">No matches. Sweep some boards or loosen the profile.</p>
+  <p class="empty">{% if q %}No matches for &ldquo;{{ q }}&rdquo;.{% else %}No matches. Sweep some boards or loosen the profile.{% endif %}</p>
+  {% if not full_page %}<div id="report" hx-swap-oob="innerHTML"></div>{% endif %}
   {% endif %}
 </div>

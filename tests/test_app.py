@@ -115,7 +115,6 @@ def test_feed_shows_matches_with_breakdown(client):
     assert "Software Engineer, Payments" in page
     assert "DISMISSED-ROW" not in page
     assert "REJECTED-ROW" not in page
-    assert "42.5" in page
     # Rows stay light: the full reasons load into the report on click.
     assert "sparse description x0.85" not in page
     job_id = int(re.search(r'id="job-(\d+)"', page).group(1))

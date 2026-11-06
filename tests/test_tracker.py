@@ -4,6 +4,7 @@ Same pattern as test_app.py: TestClient with the get_db dependency
 overridden to per-request connections against a seeded tmp database.
 """
 
+import json
 import sqlite3
 
 import pytest
@@ -538,3 +539,13 @@ def test_saving_details_refreshes_the_panel_and_the_card(client):
     assert "modal-overlay" in saved
     assert 'id="board" hx-swap-oob="true"' in saved
     assert saved.count("Call Alex") == 2  # the form field and the card
+
+
+def test_track_button_swaps_itself_not_the_report(client):
+    assert 'hx-target="this" hx-swap="outerHTML"' in client.get("/").text
+
+
+def test_tracking_tells_the_page_to_refresh_the_report(client):
+    job_id = client.job_ids["payments"]
+    response = client.post(f"/jobs/{job_id}/track")
+    assert json.loads(response.headers["HX-Trigger"]) == {"jobTracked": job_id}

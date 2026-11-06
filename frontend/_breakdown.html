@@ -19,7 +19,7 @@
   <li class="chips-row"><span class="pts"></span>
     <span class="chips">
       {%- for kw in cov.matched %}<span class="chip on">{{ kw }}</span>{% endfor %}
-      {%- for kw in cov.missing %}<span class="chip off" title="missing">{{ kw }}</span>{% endfor -%}
+      {%- for kw in cov.missing %}<span class="chip off{{ ' soft' if key == 'preferred' }}" title="missing">{{ kw }}</span>{% endfor -%}
     </span>
   </li>
   {% else %}

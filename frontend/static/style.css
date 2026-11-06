@@ -386,3 +386,21 @@ details[open] > summary::before { transform: rotate(45deg); }
 .lane-more > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 2px; list-style: none; }
 .lane-more > summary::-webkit-details-marker { display: none; }
 .lane-more[open] > summary { display: none; }
+
+/* Keep titles readable on laptops: the strip drops before the report does. */
+@media (max-width: 1280px) {
+  .job-row { grid-template-columns: 44px minmax(0, 1fr) 90px 28px; }
+  .job-row .strip, .legend { display: none; }
+}
+@media (max-width: 720px) {
+  .job-row { grid-template-columns: 38px minmax(0, 1fr) 28px; }
+}
+code.kw { font-family: var(--sans); }
+.contact-badge { font-family: var(--sans); }
+.chip.off.soft { box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); }
+select {
+  appearance: none; padding-right: 26px; background-repeat: no-repeat; background-position: right 8px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%23aab1ba' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.app-card:focus-visible, .job-row:focus-visible, .contact-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.modal:focus { outline: none; }
