@@ -2,19 +2,59 @@
 {% set active = 'matches' %}
 {% block title %}Matches — Job Search Tool{% endblock %}
 {% block content %}
-<header class="page-head">
-  <h1>Matches</h1>
-  <input id="q" class="search" type="search" name="q" value="{{ q or '' }}"
-         placeholder="Search title or company&hellip;" autocomplete="off"
-         hx-get="/feed" hx-target="#feed" hx-swap="outerHTML"
-         hx-trigger="input changed delay:300ms, search">
-  <button class="sweep" hx-post="/sweep" hx-target="#feed" hx-swap="outerHTML"
-          hx-include="#q" hx-disabled-elt="this"
-          hx-indicator="#sweep-ind">Sweep boards</button>
-  <span id="sweep-ind" class="htmx-indicator hint">Sweeping boards&hellip;</span>
-  <button class="rescore" hx-post="/rescore" hx-target="#feed" hx-swap="outerHTML"
-          hx-include="#q" hx-disabled-elt="this">Re-score all jobs</button>
-</header>
-{% include "_sweep_stamp.html" %}
-{% include "_feed.html" %}
+<div class="split">
+  <div class="feed-col">
+    <header class="page-head">
+      <h1>Matches</h1>
+      <input id="q" class="search" type="search" name="q" value="{{ q or '' }}"
+             placeholder="Search title or company&hellip;" autocomplete="off" aria-label="Search title or company"
+             hx-get="/feed" hx-target="#feed" hx-swap="outerHTML"
+             hx-trigger="input changed delay:300ms, search">
+      <span class="spacer"></span>
+      <span id="sweep-ind" class="htmx-indicator hint">Sweeping boards&hellip;</span>
+      <button class="rescore" hx-post="/rescore" hx-target="#feed" hx-swap="outerHTML"
+              hx-include="#q" hx-disabled-elt="this">Re-score all jobs</button>
+      <button class="sweep" hx-post="/sweep" hx-target="#feed" hx-swap="outerHTML"
+              hx-include="#q" hx-disabled-elt="this"
+              hx-indicator="#sweep-ind">Sweep boards</button>
+    </header>
+    {% include "_sweep_stamp.html" %}
+    {% include "_feed.html" %}
+  </div>
+  <aside id="report" class="report" aria-label="Job detail"></aside>
+</div>
+<script>
+  // Row clicks open the report, except clicks meant for the row's controls.
+  function opensJob(evt) {
+    return !evt.target.closest("a, button");
+  }
+  // The report says which job it shows; the list highlights that row.
+  document.addEventListener("htmx:afterSwap", function (evt) {
+    if (evt.detail.target.id !== "report") return;
+    evt.detail.target.scrollTop = 0;
+    var shown = evt.detail.target.querySelector("[data-job]");
+    document.querySelectorAll(".job-row.sel").forEach(function (row) {
+      row.classList.remove("sel");
+    });
+    var row = shown && document.getElementById("job-" + shown.dataset.job);
+    if (row) row.classList.add("sel");
+  });
+  // Dismissing drops the row and moves the report on to the next job.
+  function dropRow(jobId) {
+    var row = document.getElementById("job-" + jobId);
+    if (!row) return;
+    var next = row.nextElementSibling;
+    var wasShown = row.classList.contains("sel");
+    row.remove();
+    if (!wasShown) return;
+    if (next && next.classList.contains("job-row")) next.click();
+    else document.getElementById("report").innerHTML = "";
+  }
+  // Tracking from the row refreshes the report if it shows that job.
+  function refreshReport(jobId) {
+    if (document.querySelector('#report [data-job="' + jobId + '"]')) {
+      htmx.ajax("GET", "/jobs/" + jobId + "/detail", "#report");
+    }
+  }
+</script>
 {% endblock %}

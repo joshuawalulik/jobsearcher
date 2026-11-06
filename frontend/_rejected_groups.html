@@ -1,7 +1,7 @@
 <div id="rejected-groups">
   {% for group in groups %}
   <details class="gate-group" {% if q %}open{% endif %}>
-    <summary><strong>{{ group.gate }}</strong> — {{ group.total }} rejection{{ 's' if group.total != 1 }}</summary>
+    <summary><strong>{{ group.gate }}</strong><em>{{ group.total }}</em></summary>
     {% if group.rows | length < group.total %}
     <p class="hint">Showing first {{ group.rows | length }} of {{ group.total }}.</p>
     {% endif %}
@@ -10,7 +10,7 @@
       <tbody>
         {% for row in group.rows %}
         <tr>
-          <td>{{ row.title }}</td>
+          <td class="tt">{{ row.title }}</td>
           <td>{{ row.company }}</td>
           <td>{{ row.location or '—' }}</td>
           <td class="reason">{{ row.reason }}</td>

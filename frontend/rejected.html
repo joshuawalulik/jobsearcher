@@ -2,6 +2,7 @@
 {% set active = 'rejected' %}
 {% block title %}Rejected — Job Search Tool{% endblock %}
 {% block content %}
+<div class="page">
 <header class="page-head">
   <h1>Gate rejections</h1>
   <input class="search" type="search" name="q" value="{{ q or '' }}"
@@ -12,4 +13,5 @@
 <p class="hint">Every stored rejection reason, grouped by gate. A job that failed
 several gates appears under each of them.</p>
 {% include "_rejected_groups.html" %}
+</div>
 {% endblock %}

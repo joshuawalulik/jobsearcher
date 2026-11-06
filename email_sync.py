@@ -580,6 +580,9 @@ def sync(conn, profile: dict, *, secrets: dict | None = None, imap=None,
     finally:
         if own_connection:
             imap.logout()
+    db.set_state(
+        conn, "last_email_sync", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    )
     return summary
 
 

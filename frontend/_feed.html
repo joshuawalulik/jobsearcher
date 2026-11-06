@@ -1,11 +1,14 @@
 <div id="feed">
   <p class="status">
     {% if summary %}<strong>{{ summary }}</strong> {% endif %}
-    {{ jobs | length }} match{{ 'es' if jobs | length != 1 }} shown.
+    {{ '{:,}'.format(total) }} match{{ 'es' if total != 1 }}.
   </p>
-  {% for job in jobs %}
-    {% include "_card.html" %}
+  {% include "_feed_rows.html" %}
+  {% if jobs %}
+  {# Open on the first job still to decide, not one already tracked. #}
+  {% set first = (jobs | rejectattr('tracked') | first) or jobs[0] %}
+  <span hx-get="/jobs/{{ first.id }}/detail" hx-target="#report" hx-swap="innerHTML" hx-trigger="load"></span>
   {% else %}
-    <p class="empty">No matches. Sweep some boards or loosen the profile.</p>
-  {% endfor %}
+  <p class="empty">No matches. Sweep some boards or loosen the profile.</p>
+  {% endif %}
 </div>

@@ -4,15 +4,21 @@
 {% block content %}
 <header class="page-head">
   <h1>Tracker</h1>
+  <span class="spacer"></span>
+  <span id="email-ind" class="htmx-indicator hint">Checking inbox&hellip;</span>
+  <button type="button" onclick="var d = document.getElementById('add-job'); d.open = !d.open">Add a job manually</button>
   <button class="sync-email" hx-post="/email/sync" hx-target="#email-sync-status"
           hx-swap="outerHTML" hx-disabled-elt="this"
           hx-indicator="#email-ind">Sync email</button>
-  <span id="email-ind" class="htmx-indicator hint">Checking inbox&hellip;</span>
 </header>
+<div class="stamp">
+  {% if last_email_sync %}<span><span class="live-dot"></span>Inbox synced {{ last_email_sync }}</span>{% endif %}
+  <span>{{ pending_replies }} repl{{ 'y' if pending_replies == 1 else 'ies' }} waiting</span>
+  {% include "_email_ignored.html" %}
+</div>
 <p id="email-sync-status" class="status"></p>
-{% include "_email_ignored.html" %}
-<details class="add-job">
-  <summary>Add a job manually</summary>
+<details id="add-job" class="add-job">
+  <summary hidden></summary>
   <p class="hint">For jobs found outside the tool (referral, LinkedIn, a company
   not on the watchlist). Goes straight to the considering lane — scored against
   your profile (paste the JD for a meaningful number), but never gated or swept.</p>
@@ -27,16 +33,27 @@
 {% include "_board.html" %}
 <div id="modal"></div>
 <script>
-  // Card clicks open the detail modal — except clicks meant for the
-  // card's own controls (job link, lane select, untrack, details form).
+  // Card clicks open the slide-over, except clicks on the card's own controls.
   function opensAppModal(evt) {
-    return !evt.target.closest("a, button, select, input, textarea, label, summary, details");
+    return !evt.target.closest("a, button");
   }
+  function closeAppPanel() {
+    var overlay = document.querySelector(".modal-overlay");
+    if (overlay) overlay.remove();
+    markOpenCard();
+  }
+  // Outline the card the slide-over shows, including after the board redraws.
+  function markOpenCard() {
+    var open = document.querySelector(".modal[data-app]");
+    document.querySelectorAll(".app-card.sel").forEach(function (card) {
+      card.classList.remove("sel");
+    });
+    var card = open && document.getElementById("app-" + open.dataset.app);
+    if (card) card.classList.add("sel");
+  }
+  document.addEventListener("htmx:afterSettle", markOpenCard);
   document.addEventListener("keydown", function (evt) {
-    if (evt.key === "Escape") {
-      var overlay = document.querySelector(".modal-overlay");
-      if (overlay) overlay.remove();
-    }
+    if (evt.key === "Escape") closeAppPanel();
   });
   // Replacing all of #board (lane select, suggestion accept/dismiss,
   // untrack) destroys the browser's scroll anchor and the page jumps to

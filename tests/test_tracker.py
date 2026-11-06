@@ -92,12 +92,12 @@ def test_feed_shows_track_button_then_lane_pill(client):
     app_id = track(client)
     page = client.get("/").text
     # The pill mirrors the tracker lane, starting at Considering.
-    assert ">Considering</a>" in page
+    assert ">considering</a>" in page
     # The tracked card no longer offers a Track button; the untracked one does.
     assert page.count("Track</button>") == 1
     # Moving lanes on the tracker updates the feed pill too.
     client.post(f"/applications/{app_id}/lane", data={"lane": "applied"})
-    assert ">Applied</a>" in client.get("/").text
+    assert ">applied</a>" in client.get("/").text
 
 
 def test_application_modal_shows_jd_breakdown_details_and_status(client):
@@ -121,7 +121,7 @@ def test_application_modal_shows_jd_breakdown_details_and_status(client):
     assert "Full JD text MODAL-JD" in page          # saved job description
     assert "title matches" in page                  # score breakdown
     assert "Ping recruiter MODAL-NOTE" in page      # details
-    assert ">Considering</span>" in page            # status (lane)
+    assert 'value="considering" selected' in page  # status (lane)
     assert 'href="https://example.com/job"' in page  # link to the posting
 
 
@@ -229,9 +229,9 @@ def test_untrack_unknown_application_404s(client):
 
 def test_considering_card_shows_untrack_button(client):
     app_id = track(client)
-    assert "Untrack" in client.get("/tracker").text
+    assert "Untrack" in client.get(f"/applications/{app_id}/modal").text
     client.post(f"/applications/{app_id}/lane", data={"lane": "applied"})
-    assert "Untrack" not in client.get("/tracker").text
+    assert "Untrack" not in client.get(f"/applications/{app_id}/modal").text
 
 
 def test_details_save_persists_fields(client):
@@ -309,10 +309,10 @@ def test_tracker_card_shows_score_breakdown(client):
     )
     client.db.commit()
     app_id = track(client)
-    page = client.get("/tracker").text
+    page = client.get(f"/applications/{app_id}/modal").text
     assert "Score breakdown" in page
     assert "title matches target" in page
-    # The details-save response re-renders the card with the breakdown too.
+    # The details-save response re-renders the panel with the breakdown too.
     saved = client.post(
         f"/applications/{app_id}",
         data={"notes": "n", "resume_version": "", "next_action": "",
@@ -338,9 +338,9 @@ def test_tracker_shows_pending_suggestion_with_actions(client):
     db.set_application_lane(client.db, app_id, "applied")
     sid = suggest(client, app_id)
     page = client.get("/tracker").text
-    assert "suggests <strong>Rejected</strong>" in page
+    assert "Suggests Rejected" in page
     # The stored mail is inspectable: full body + a Gmail deep link.
-    assert "FULL-EMAIL-BODY here." in page
+    assert "FULL-EMAIL-BODY here." in client.get(f"/applications/{app_id}/modal").text
     assert "rfc822msgid%3Amid42%40acme.com" in page
     assert "Open in Gmail" in page
     assert "not moving forward" in page
@@ -390,8 +390,8 @@ def test_filed_receipt_is_reply_history_not_a_card(client):
         suggested_lane=None, reason='automatic receipt: "received your application"',
         kind="receipt", status="accepted",
     )
+    assert '<span class="kind-pill">Receipt</span>' in client.get(f"/applications/{app_id}/modal").text
     page = client.get("/tracker").text
-    assert '<span class="kind-pill">Receipt</span>' in page
     assert "Save reply" not in page
     assert "/email/suggestions/" not in page
 
@@ -457,10 +457,9 @@ def test_save_reply_only_suggestion_keeps_history_without_lane_move(client):
         "SELECT lane FROM applications WHERE id = ?", (app_id,)
     ).fetchone()
     assert row["lane"] == "applied"  # unchanged — nothing to move to
-    # The kept reply now renders as history in the card's Details section…
-    assert "Email replies" in board
-    assert "Update on your application" in board
-    # …and in the modal, with sender and reason.
+    # The kept reply leaves the card and renders as history in the panel,
+    # with sender and reason.
+    assert "Save reply" not in board
     modal = client.get(f"/applications/{app_id}/modal").text
     assert "Email replies" in modal
     assert "r@acme.com" in modal
@@ -472,9 +471,7 @@ def test_accepted_lane_move_shows_in_history_dismissed_hidden(client):
     db.set_application_lane(client.db, app_id, "applied")
     sid = suggest(client, app_id)  # suggests rejected
     client.post(f"/email/suggestions/{sid}/accept")
-    page = client.get("/tracker").text
-    assert "Email replies" in page
-    assert "moved to rejected" not in page  # card history is compact
+    assert "moved to rejected" not in client.get("/tracker").text
     modal = client.get(f"/applications/{app_id}/modal").text
     assert "moved to rejected" in modal
 
@@ -529,3 +526,15 @@ def test_email_sync_endpoint_runs_sync_and_refreshes_board(client, monkeypatch):
     # Out-of-band board refresh carries the new suggestion.
     assert 'hx-swap-oob="true"' in page
     assert "phone screen" in page
+
+
+def test_saving_details_refreshes_the_panel_and_the_card(client):
+    app_id = track(client)
+    saved = client.post(
+        f"/applications/{app_id}",
+        data={"notes": "", "resume_version": "", "next_action": "Call Alex",
+              "next_action_due": "", "applied_at": ""},
+    ).text
+    assert "modal-overlay" in saved
+    assert 'id="board" hx-swap-oob="true"' in saved
+    assert saved.count("Call Alex") == 2  # the form field and the card

@@ -15,7 +15,7 @@ def conn(tmp_path):
 
 def test_schema_creates_all_tables(conn):
     assert db.table_names(conn) == [
-        "applications", "companies", "contact_applications", "contact_mail", "contacts",
+        "app_state", "applications", "companies", "contact_applications", "contact_mail", "contacts",
         "email_ignored", "email_suggestions", "events", "interactions", "jobs",
         "sweep_runs",
     ]
@@ -24,7 +24,7 @@ def test_schema_creates_all_tables(conn):
 def test_init_db_is_idempotent(conn):
     db.init_db(conn)
     assert db.table_names(conn) == [
-        "applications", "companies", "contact_applications", "contact_mail", "contacts",
+        "app_state", "applications", "companies", "contact_applications", "contact_mail", "contacts",
         "email_ignored", "email_suggestions", "events", "interactions", "jobs",
         "sweep_runs",
     ]

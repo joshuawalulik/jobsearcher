@@ -34,6 +34,8 @@ from scrapers.sweep import load_profile
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 PROFILE_PATH = profile_io.PROFILE_PATH
 REJECTED_ROWS_PER_GATE = 100
+SWEEP_TIMES = ((8 * 60 + 30, "8:30"), (16 * 60 + 30, "16:30"))  # launchd schedule
+FEED_PAGE = 50  # rows per load; paging mechanics, not a preference
 DISMISSED_ROWS = 100
 
 
@@ -139,14 +141,69 @@ def _attach_contact_badges(conn, rows: list[dict]) -> list[dict]:
     return contacts
 
 
-def _matches(conn, q: str | None = None) -> list[dict]:
+def _matches(
+    conn, q: str | None = None, after: tuple[float, int] | None = None
+) -> list[dict]:
+    """One page of the feed, with its badges."""
     jobs = []
-    for row in db.fetch_matches(conn, q):
+    for row in db.fetch_matches(conn, q, limit=FEED_PAGE, after=after):
         job = dict(row)
-        job["breakdown"] = json.loads(job["score_breakdown"]) if job["score_breakdown"] else None
+        job.pop("description")  # the report loads it on click
+        breakdown = json.loads(job.pop("score_breakdown") or "null")
+        job["strip"] = score_strip(breakdown)
         jobs.append(job)
     _attach_contact_badges(conn, jobs)
     return jobs
+
+
+# Score-strip buckets; anything negative counts as penalty whatever its category.
+_STRIP_BUCKETS = {"title": "title", "required": "required", "preferred": "preferred"}
+
+
+def score_strip(breakdown: dict | None) -> dict | None:
+    """Points by bucket for a feed row's strip, with widths on one fixed ramp.
+
+    The ramp is 100 points to the full track so strip length means the same
+    on every row. Multipliers aren't drawn; the report lists them. Breakdowns
+    from before categories existed have nothing to bucket and return None.
+    """
+    components = (breakdown or {}).get("components") or []
+    if not components or "category" not in components[0]:
+        return None
+    points = {"title": 0.0, "required": 0.0, "preferred": 0.0, "penalty": 0.0}
+    for component in components:
+        value = component["points"]
+        if value < 0:
+            points["penalty"] -= value
+        elif component["category"] in _STRIP_BUCKETS:
+            points[_STRIP_BUCKETS[component["category"]]] += value
+    scale = 100 / max(100, sum(points.values()))
+    return {**points, "widths": {k: round(v * scale, 1) for k, v in points.items()}}
+
+
+def next_sweep_label(now: datetime) -> str:
+    """Time of the next launchd sweep (see launchd/ plist), for the feed header."""
+    minutes = now.hour * 60 + now.minute
+    return next((label for at, label in SWEEP_TIMES if at > minutes), SWEEP_TIMES[0][1])
+
+
+def _feed_context(conn, q: str = "", summary: str | None = None) -> dict:
+    """First page of the feed plus what its header and paging need."""
+    return {
+        "jobs": _matches(conn, q),
+        "total": db.count_matches(conn, q),
+        "page_size": FEED_PAGE,
+        "q": q,
+        "summary": summary,
+    }
+
+
+def _sweep_context(conn) -> dict:
+    return {
+        "last_sweep": _last_sweep(conn),
+        "last_run": _last_run(conn),
+        "next_sweep": next_sweep_label(datetime.now()),
+    }
 
 
 def _rescore_summary(summary: dict) -> str:
@@ -156,20 +213,43 @@ def _rescore_summary(summary: dict) -> str:
     )
 
 
+def short_date(value: str | None) -> str:
+    """'2026-11-04...' as 'Nov 4', with the year if it isn't this one; else unchanged."""
+    if not value:
+        return ""
+    try:
+        day = date.fromisoformat(value[:10])
+    except ValueError:
+        return value
+    if day.year != date.today().year:
+        return f"{day:%b} {day.day}, {day.year}"
+    return f"{day:%b} {day.day}"
+
+
+templates.env.filters["short_date"] = short_date
+
+
+def _utc(stamp: str) -> datetime:
+    return datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+
+
+def _ago(stamp: str) -> str:
+    """Rough age of a stored UTC timestamp."""
+    minutes = max(0, int((datetime.now(timezone.utc) - _utc(stamp)).total_seconds() // 60))
+    if minutes < 60:
+        return f"{minutes} min ago"
+    if minutes < 48 * 60:
+        return f"{minutes // 60}h ago"
+    return f"{minutes // (24 * 60)} days ago"
+
+
 def _last_sweep(conn) -> dict | None:
     """Local time + rough age of the last sweep, for the feed header."""
     stamp = db.last_sweep_time(conn)
     if not stamp:
         return None
-    swept = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-    minutes = max(0, int((datetime.now(timezone.utc) - swept).total_seconds() // 60))
-    if minutes < 60:
-        ago = f"{minutes} min ago"
-    elif minutes < 48 * 60:
-        ago = f"{minutes // 60} h ago"
-    else:
-        ago = f"{minutes // (24 * 60)} days ago"
-    return {"local": swept.astimezone().strftime("%a %H:%M"), "ago": ago}
+    swept = _utc(stamp)
+    return {"local": swept.astimezone().strftime("%a %H:%M"), "ago": _ago(stamp)}
 
 
 def _last_run(conn) -> dict | None:
@@ -187,17 +267,46 @@ def matches_feed(request: Request, q: str = "", conn=Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"jobs": _matches(conn, q), "summary": None, "q": q,
-         "last_sweep": _last_sweep(conn), "last_run": _last_run(conn)},
+        {**_feed_context(conn, q), **_sweep_context(conn)},
     )
 
 
 @app.get("/feed", response_class=HTMLResponse)
 def feed_partial(request: Request, q: str = "", conn=Depends(get_db)):
     """HTMX partial for the search box (and anything else refreshing the feed)."""
+    return templates.TemplateResponse(request, "_feed.html", _feed_context(conn, q))
+
+
+@app.get("/feed/more", response_class=HTMLResponse)
+def feed_more(
+    request: Request,
+    after_score: float,
+    after_id: int,
+    q: str = "",
+    conn=Depends(get_db),
+):
+    """The next page of rows, fetched when the end of the list scrolls into view."""
     return templates.TemplateResponse(
-        request, "_feed.html", {"jobs": _matches(conn, q), "summary": None}
+        request,
+        "_feed_rows.html",
+        {
+            "jobs": _matches(conn, q, after=(after_score, after_id)),
+            "page_size": FEED_PAGE,
+            "q": q,
+        },
     )
+
+
+@app.get("/jobs/{job_id}/detail", response_class=HTMLResponse)
+def job_detail(job_id: int, request: Request, conn=Depends(get_db)):
+    """The report beside the feed: full reasons and description for one job."""
+    row = db.fetch_job_detail(conn, job_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no job with id {job_id}")
+    job = dict(row)
+    job["breakdown"] = json.loads(job["score_breakdown"]) if job["score_breakdown"] else None
+    _attach_contact_badges(conn, [job])
+    return templates.TemplateResponse(request, "_job_panel.html", {"job": job})
 
 
 @app.post("/jobs/{job_id}/dismiss")
@@ -235,7 +344,7 @@ async def rescore(request: Request, conn=Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "_feed.html",
-        {"jobs": _matches(conn, q), "summary": _rescore_summary(summary)},
+        _feed_context(conn, q, _rescore_summary(summary)),
     )
 
 
@@ -260,8 +369,8 @@ async def sweep_now(request: Request, conn=Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "_sweep_result.html",
-        {"jobs": _matches(conn, q), "summary": message,
-         "last_sweep": _last_sweep(conn), "last_run": _last_run(conn)},
+        {**_feed_context(conn, q, message),
+         **_sweep_context(conn)},
     )
 
 
@@ -326,11 +435,22 @@ def _lanes(conn) -> list[dict]:
     return [{"name": lane, "apps": apps} for lane, apps in by_lane.items()]
 
 
+def _tracker_context(conn) -> dict:
+    lanes = _lanes(conn)
+    synced = db.get_state(conn, "last_email_sync")
+    return {
+        "lanes": lanes,
+        "all_lanes": db.LANES,
+        "pending_replies": sum(len(a["suggestions"] or []) for lane in lanes for a in lane["apps"]),
+        "last_email_sync": _ago(synced) if synced else None,
+    }
+
+
 @app.get("/tracker", response_class=HTMLResponse)
 def tracker(request: Request, conn=Depends(get_db)):
     return templates.TemplateResponse(
         request, "tracker.html",
-        {"lanes": _lanes(conn), "all_lanes": db.LANES, **_ignored_mail(conn)},
+        {**_tracker_context(conn), **_ignored_mail(conn)},
     )
 
 
@@ -342,7 +462,9 @@ def application_modal(app_id: int, request: Request, conn=Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"no application with id {app_id}")
     app_row = _app_dict(row)
     _attach_suggestions(conn, [app_row])
-    return templates.TemplateResponse(request, "_app_modal.html", {"a": app_row})
+    return templates.TemplateResponse(
+        request, "_app_modal.html", {"a": app_row, "all_lanes": db.LANES}
+    )
 
 
 @app.get("/jobs/lookup", response_class=HTMLResponse)
@@ -458,7 +580,7 @@ def track(job_id: int, conn=Depends(get_db)):
         conn.commit()
     # Swaps in for the card's Track button (hx-swap="outerHTML"). New
     # applications always start in the considering lane.
-    return '<a class="tracked" href="/tracker">Considering</a>'
+    return '<a class="tracked considering" href="/tracker">considering</a>'
 
 
 @app.post("/applications/{app_id}/lane", response_class=HTMLResponse)
@@ -500,8 +622,8 @@ async def save_application(app_id: int, request: Request, conn=Depends(get_db)):
     _attach_suggestions(conn, [app_row])
     return templates.TemplateResponse(
         request,
-        "_app_card.html",
-        {"a": app_row, "all_lanes": db.LANES, "saved": True},
+        "_app_saved.html",
+        {"a": app_row, "all_lanes": db.LANES, "saved": True, "lanes": _lanes(conn)},
     )
 
 

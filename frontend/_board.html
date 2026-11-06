@@ -1,12 +1,19 @@
 <div id="board"{% if oob %} hx-swap-oob="true"{% endif %}>
   {% for lane in lanes %}
+  {% if lane.name in ('rejected', 'skipped') %}
+  <details class="lane">
+    <summary>{{ lane.name }} <span class="count">{{ lane.apps | length }}</span></summary>
+    {% for a in lane.apps %}{% include "_app_card.html" %}{% endfor %}
+  </details>
+  {% else %}
   <section class="lane">
     <h2>{{ lane.name }} <span class="count">{{ lane.apps | length }}</span></h2>
     {% for a in lane.apps %}
       {% include "_app_card.html" %}
     {% else %}
-      <p class="lane-empty">&mdash;</p>
+      <p class="lane-empty">{% if lane.name == 'interviewing' %}Moves here when you accept an email suggestion or change a card's lane.{% else %}Nothing here yet.{% endif %}</p>
     {% endfor %}
   </section>
+  {% endif %}
   {% endfor %}
 </div>

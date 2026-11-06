@@ -1,0 +1,10 @@
+{# One page of the feed. A full page ends in a loader that fetches the next
+   one when scrolled into view, keyed on the last row's place in the ranking. #}
+{% for job in jobs %}
+  {% include "_card.html" %}
+{% endfor %}
+{% if jobs | length == page_size %}
+{% set last = jobs[-1] %}
+<p class="feed-more hint" hx-get="/feed/more?after_score={{ last.score }}&after_id={{ last.id }}&q={{ q | urlencode }}"
+   hx-trigger="revealed" hx-swap="outerHTML">Loading the next {{ page_size }}&hellip;</p>
+{% endif %}

@@ -15,6 +15,7 @@
 {%- endmacro %}
 
 {% block content %}
+<div class="page">
 <header class="page-head">
   <h1>Analytics</h1>
 </header>
@@ -42,13 +43,16 @@ the events history — a card that is rejected now but had an interview still co
   </div>
 </div>
 
+<div class="grid2">
 <section class="panel">
   <h2>Funnel</h2>
-  <div class="funnel">
+  {% set top = funnel.lanes | map(attribute='count') | max %}
+  <div class="bars funnel">
     {% for lane in funnel.lanes %}
-    <div class="funnel-lane">
-      <span class="stat-label">{{ lane.name }}</span>
-      <span class="funnel-count{{ ' zero' if not lane.count }}">{{ lane.count }}</span>
+    <div class="bar-row funnel-lane">
+      <span>{{ lane.name }}</span>
+      <i style="width: {{ (lane.count * 100 / top) if top else 0 }}%"></i>
+      <b>{{ lane.count }}</b>
     </div>
     {% endfor %}
   </div>
@@ -64,6 +68,9 @@ the events history — a card that is rejected now but had an interview still co
   </div>
 </section>
 
+</div>
+
+<div class="grid2">
 <section class="panel">
   <h2>Fast-apply effect</h2>
   <div class="meters">
@@ -97,6 +104,8 @@ the events history — a card that is rejected now but had an interview still co
   {% endif %}
 </section>
 
+</div>
+
 <section class="panel">
   <h2>Keywords that advance</h2>
   {% if keywords.rows %}
@@ -119,4 +128,5 @@ the events history — a card that is rejected now but had an interview still co
   <p class="empty">No keyword hits among applied jobs yet.</p>
   {% endif %}
 </section>
+</div>
 {% endblock %}
