@@ -146,6 +146,83 @@ analytics:            # read-only reporting knobs
   score_band_edges: [40, 50]    # reply-rate bands: <40, 40–50, 50+
   fast_apply_hours: 48          # "applied fast" threshold vs first_seen
 
+schedule:             # the daily plan on /schedule; adherence is measured against it
+  workdays: [mon, tue, wed, thu, fri]
+  # Blocks in day order. kind says how a block gets marked done:
+  #   triage        — a job dismissed or tracked, or a reply suggestion handled
+  #   outreach      — outbound interactions logged that day (new + follow-ups)
+  #   applications  — tracked jobs moved to ready, applied or skipped that day
+  #   manual        — you mark it done on /schedule, or Claude logs it through
+  #                   the connector's log_block tool
+  # Any block can also be marked done by hand. target is the count that makes
+  # an auto block done for the day; fewer is partial.
+  blocks:
+    - key: triage
+      label: Triage
+      start: "09:00"
+      end: "09:30"
+      kind: triage
+      detail: Due today, new replies and the 8:30 sweep.
+    - key: outreach
+      label: Outreach and referrals
+      start: "09:30"
+      end: "10:30"
+      kind: outreach
+      target: 3
+      detail: Follow-ups first, then 3 new messages. Check list contacts on LinkedIn before drafting.
+    - key: applications
+      label: Applications
+      start: "10:30"
+      end: "12:30"
+      kind: applications
+      target: 2
+      detail: Run /apply on the top 2 To decide jobs. Check for a contact at each company before submitting.
+    - key: coding
+      label: Coding prep
+      start: "13:30"
+      end: "15:00"
+      kind: manual
+      detail: Timed problems, one pattern per day.
+    - key: prep
+      label: Hello Interview
+      start: "15:15"
+      end: "16:30"
+      kind: manual
+      detail: One system design topic at a time.
+      themed: true          # detail follows themes: below
+    - key: shutdown
+      label: Shut down
+      start: "16:30"
+      end: "16:45"
+      kind: manual
+      detail: Pick tomorrow's 2 jobs and 3 contacts, then stop for the day.
+  themes:                 # the themed block's focus by weekday
+    mon: Learn a system design concept.
+    tue: Do a full design problem.
+    wed: Prepare behavioral stories from your resume.
+    thu: Do a second design problem, out loud and timed.
+  # Per-weekday changes to a block, by key. drop: true removes it that day.
+  overrides:
+    fri:
+      applications:
+        target: 1
+      coding:
+        label: Mock interview
+        detail: A mock interview, even a simple one with a friend.
+      prep:
+        label: Weekly review
+        end: "15:45"
+        detail: Go over the week's numbers and adjust next week's plan.
+        themed: false
+      shutdown:
+        drop: true
+  weekly_targets:         # shown as progress, never enforced
+    applications: 9       # moved to applied or ready (skips count as decided, not here)
+    outreach_new: 15      # first messages to new contacts
+    conversations: 2      # people who wrote back
+    coding: 4             # coding blocks done
+    prep: 4               # Hello Interview blocks done
+
 workflow:              # local application workflow (/apply + apply_run)
   # Folder that holds per-company application folders under Applications/.
   home: /Users/you/Documents/JobSearch

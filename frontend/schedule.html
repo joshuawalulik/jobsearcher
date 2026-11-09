@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% set active = 'schedule' %}
+{% block title %}Schedule — Job Search Tool{% endblock %}
+
+{% block content %}
+<div class="page">
+<header class="page-head sched-head">
+  <h1>{% if is_today %}Today{% else %}{{ day_label }}{% endif %}</h1>
+  {% if is_today %}<span class="meta">{{ day_label }}</span>{% endif %}
+  <span class="day-nav">
+    <a href="/schedule?day={{ prev_day }}" aria-label="Previous day">&larr;</a>
+    {% if not is_today %}<a href="/schedule">Today</a>{% endif %}
+    <a href="/schedule?day={{ next_day }}" aria-label="Next day">&rarr;</a>
+  </span>
+</header>
+<div id="schedule-body"
+     hx-get="/schedule/body?day={{ today.day }}"
+     hx-trigger="every 60s"
+     hx-swap="innerHTML">
+  {% include "_schedule_body.html" %}
+</div>
+</div>
+{% endblock %}
