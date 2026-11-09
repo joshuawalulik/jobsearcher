@@ -13,7 +13,7 @@ Run by hand for debugging: .venv/bin/python mcp_server.py
 
 import functools
 import json
-from datetime import date
+from datetime import date, datetime
 
 import yaml
 from mcp.server.mcpserver import MCPServer
@@ -22,6 +22,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 import db
 import outreach
 import referral_watch
+import schedule
 from profile_io import PROFILE_PATH
 
 mcp = MCPServer(
@@ -57,7 +58,14 @@ mcp = MCPServer(
         "offers a referral for any future role. Mentors are there for advice and information only: never ask "
         "them for a job, a referral or an intro unless the user says to. "
         "Show any warnings a tool returns to the user. If do_not_contact "
-        "is set, never draft to or suggest that person."
+        "is set, never draft to or suggest that person.\n\n"
+        "Daily schedule: today_plan shows the day's time blocks with status "
+        "and this week's targets; use it when the user asks what to do now "
+        "or how the day is going. Applications and outreach blocks fill in "
+        "from the tracker; prep blocks (coding, prep, shutdown) are done only "
+        "when logged, so call log_block with a short note after running a "
+        "prep session in chat or when the user says a block is done. Never "
+        "log a block the user didn't do."
     ),
 )
 
@@ -467,6 +475,71 @@ def weekly_summary(week_of: str | None = None) -> dict:
     finally:
         conn.close()
     return outreach.weekly_summary(rows, interactions, day, cfg)
+
+
+def _schedule_cfg() -> dict:
+    return yaml.safe_load(PROFILE_PATH.read_text())["schedule"]
+
+
+def _schedule_day(conn, cfg: dict, day: str) -> dict:
+    now = datetime.now()
+    monday, sunday = schedule.week_bounds(day)
+    activity = db.fetch_schedule_activity(conn, monday.isoformat(), sunday.isoformat())
+    logs = [dict(r) for r in db.fetch_day_logs(conn, monday.isoformat(), sunday.isoformat())]
+    built = schedule.build_day(cfg, day, activity, logs, now)
+    week = schedule.build_week(cfg, day, activity, logs, now)
+    nxt = schedule.next_block(built["blocks"])
+    return {
+        "day": built["day"],
+        "weekday": built["weekday"],
+        "workday": built["workday"],
+        "now": now.strftime("%H:%M"),
+        "up_next": nxt["key"] if nxt else None,
+        "adherence": built["adherence"],
+        "blocks": [
+            {k: b[k] for k in ("key", "label", "start", "end", "kind", "detail",
+                               "status", "count", "target", "evidence", "logged", "note")}
+            for b in built["blocks"]
+        ],
+        "week": {"pct": week["pct"], "targets": week["targets"]},
+    }
+
+
+@_contact_tool
+def today_plan(day: str | None = None) -> dict:
+    """The day's schedule blocks with status (done/partial/now/upcoming/missed),
+    the evidence behind each, and this week's targets.
+
+    Applications and outreach blocks fill themselves from the tracker and
+    contacts; manual blocks (coding, Hello Interview, shut down) are done only
+    when logged with log_block. day defaults to today.
+    """
+    cfg = _schedule_cfg()
+    conn = _connect()
+    try:
+        return _schedule_day(conn, cfg, outreach.iso_date(day or _today()))
+    finally:
+        conn.close()
+
+
+@_contact_tool
+def log_block(block_key: str, note: str | None = None, day: str | None = None) -> dict:
+    """Mark a schedule block done for a day (default today), with an optional
+    one-line note of what was covered. Works for any block; use it after a
+    prep session run in chat, or when the user says they did the block.
+    Logging twice keeps the block done and appends the note.
+    """
+    cfg = _schedule_cfg()
+    keys = {b["key"] for b in cfg["blocks"]}
+    if block_key not in keys:
+        raise ValueError(f"no block {block_key!r}; blocks are {sorted(keys)}")
+    when = outreach.iso_date(day or _today())
+    conn = _connect()
+    try:
+        db.log_block(conn, when, block_key, (note or "").strip() or None, "claude")
+        return _schedule_day(conn, cfg, when)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

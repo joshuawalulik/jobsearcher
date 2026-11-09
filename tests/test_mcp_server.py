@@ -409,5 +409,5 @@ def test_all_tools_are_exposed_and_existing_ones_remain():
         "list_contacts", "get_contact", "add_contact", "update_contact",
         "restore_contact", "log_interaction", "list_followups_due",
         "contacts_for_job", "link_contact_to_job", "weekly_summary",
-        "list_referral_watch",
+        "list_referral_watch", "today_plan", "log_block",
     }

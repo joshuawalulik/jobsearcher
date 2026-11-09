@@ -197,6 +197,19 @@ CREATE TABLE IF NOT EXISTS interactions (
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Daily schedule check-offs (/schedule). One row per block per day; the
+-- plan itself lives in profile.yaml schedule:, so a row only says "done".
+-- Blocks the app can see evidence for (applications, outreach) need no row.
+CREATE TABLE IF NOT EXISTS day_log (
+    id          INTEGER PRIMARY KEY,
+    day         TEXT NOT NULL,
+    block_key   TEXT NOT NULL,
+    note        TEXT,
+    source      TEXT NOT NULL CHECK (source IN ('ui', 'claude')),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (day, block_key)
+);
+
 -- Explicit link for when a recruiter submits the user to a specific req.
 CREATE TABLE IF NOT EXISTS contact_applications (
     contact_id      INTEGER NOT NULL REFERENCES contacts(id),
@@ -1287,6 +1300,104 @@ def fetch_open_jobs(
         """,
         (*company_ids, contact_id),
     ).fetchall()
+
+
+# --- daily schedule ---------------------------------------------------------
+
+
+def log_block(
+    conn: sqlite3.Connection, day: str, block_key: str, note: str | None, source: str
+) -> None:
+    """Mark a block done for a day. A second mark keeps the row and appends the note."""
+    conn.execute(
+        """
+        INSERT INTO day_log (day, block_key, note, source) VALUES (?, ?, ?, ?)
+        ON CONFLICT(day, block_key) DO UPDATE SET
+            note = CASE
+                WHEN excluded.note IS NULL OR excluded.note = '' THEN day_log.note
+                WHEN day_log.note IS NULL OR day_log.note = '' THEN excluded.note
+                ELSE day_log.note || char(10) || excluded.note
+            END,
+            source = excluded.source
+        """,
+        (day, block_key, note or None, source),
+    )
+    conn.commit()
+
+
+def clear_block(conn: sqlite3.Connection, day: str, block_key: str) -> bool:
+    cur = conn.execute(
+        "DELETE FROM day_log WHERE day = ? AND block_key = ?", (day, block_key)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def fetch_day_logs(conn: sqlite3.Connection, start: str, end: str) -> list[sqlite3.Row]:
+    """Check-offs for days start..end inclusive (ISO dates)."""
+    return conn.execute(
+        "SELECT day, block_key, note, source FROM day_log"
+        " WHERE day BETWEEN ? AND ? ORDER BY day, id",
+        (start, end),
+    ).fetchall()
+
+
+def fetch_schedule_activity(conn: sqlite3.Connection, start: str, end: str) -> dict:
+    """What the tracker and contacts saw happen on each day in start..end.
+
+    Timestamps stored in UTC (events, jobs.dismissed_at, sweep_runs) are read
+    in local time so a 9 PM lane move lands on the right day. interactions.date
+    is already a local date. Every row carries its day so schedule.py can
+    bucket them without touching the database.
+    """
+    lane_moves = conn.execute(
+        """
+        SELECT date(e.occurred_at, 'localtime') AS day, e.application_id, e.detail,
+               time(e.occurred_at, 'localtime') AS at, j.title, c.name AS company
+        FROM events e
+        JOIN applications a ON a.id = e.application_id
+        JOIN jobs j ON j.id = a.job_id
+        JOIN companies c ON c.id = j.company_id
+        WHERE e.type IN ('lane_change', 'tracked')
+          AND date(e.occurred_at, 'localtime') BETWEEN ? AND ?
+        ORDER BY e.id
+        """,
+        (start, end),
+    ).fetchall()
+    dismissed = conn.execute(
+        """
+        SELECT date(dismissed_at, 'localtime') AS day, COUNT(*) AS n
+        FROM jobs WHERE dismissed = 1 AND dismissed_at IS NOT NULL
+          AND date(dismissed_at, 'localtime') BETWEEN ? AND ?
+        GROUP BY 1
+        """,
+        (start, end),
+    ).fetchall()
+    interactions = conn.execute(
+        """
+        SELECT i.date AS day, i.direction, i.channel, i.summary, i.contact_id,
+               c.name, c.company, c.track,
+               (c.date_contacted = i.date) AS first_touch
+        FROM interactions i JOIN contacts c ON c.id = i.contact_id
+        WHERE i.date BETWEEN ? AND ? AND c.removed_at IS NULL
+        ORDER BY i.date, i.id
+        """,
+        (start, end),
+    ).fetchall()
+    sweeps = conn.execute(
+        """
+        SELECT date(finished_at, 'localtime') AS day, time(finished_at, 'localtime') AS at
+        FROM sweep_runs WHERE date(finished_at, 'localtime') BETWEEN ? AND ?
+        ORDER BY id
+        """,
+        (start, end),
+    ).fetchall()
+    return {
+        "lane_moves": [dict(r) for r in lane_moves],
+        "dismissed": {r["day"]: r["n"] for r in dismissed},
+        "interactions": [dict(r) for r in interactions],
+        "sweeps": [dict(r) for r in sweeps],
+    }
 
 
 def table_names(conn: sqlite3.Connection) -> list[str]:

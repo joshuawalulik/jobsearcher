@@ -9,7 +9,7 @@ import json
 import re
 import sqlite3
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -24,6 +24,7 @@ import email_sync
 import outreach
 import profile_io
 import referral_watch
+import schedule
 from autosweep import sweep_and_rescore
 from scoring.rescore import rescore_all
 from scoring.score import score_job
@@ -995,6 +996,87 @@ def analytics_page(request: Request, conn=Depends(get_db)):
         fast_hours=cfg["fast_apply_hours"],
     )
     return templates.TemplateResponse(request, "analytics.html", data)
+
+
+def _schedule_cfg() -> dict:
+    return load_profile(PROFILE_PATH)["schedule"]
+
+
+def _parse_day(value: str | None) -> date:
+    if not value:
+        return date.today()
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(400, "day must be an ISO date")
+
+
+def _schedule_context(conn, day: date) -> dict:
+    """The plan for one day plus its week, against the DB's records of the week."""
+    cfg = _schedule_cfg()
+    now = datetime.now()
+    monday, sunday = schedule.week_bounds(day)
+    start, end = monday.isoformat(), sunday.isoformat()
+    activity = db.fetch_schedule_activity(conn, start, end)
+    logs = [dict(r) for r in db.fetch_day_logs(conn, start, end)]
+    today = schedule.build_day(cfg, day, activity, logs, now)
+    return {
+        "today": today,
+        "week": schedule.build_week(cfg, day, activity, logs, now),
+        "up_next": schedule.next_block(today["blocks"]),
+        "day_label": day.strftime("%A, %b %-d") + ("" if day.year == now.year else f", {day.year}"),
+        "prev_day": (day - timedelta(days=1)).isoformat(),
+        "next_day": (day + timedelta(days=1)).isoformat(),
+        "is_today": day == now.date(),
+        "clock": now.strftime("%-I:%M %p"),
+    }
+
+
+@app.get("/schedule", response_class=HTMLResponse)
+def schedule_page(request: Request, day: str | None = None, conn=Depends(get_db)):
+    return templates.TemplateResponse(
+        request, "schedule.html", _schedule_context(conn, _parse_day(day))
+    )
+
+
+@app.get("/schedule/body", response_class=HTMLResponse)
+def schedule_body(request: Request, day: str | None = None, conn=Depends(get_db)):
+    return templates.TemplateResponse(
+        request, "_schedule_body.html", _schedule_context(conn, _parse_day(day))
+    )
+
+
+def _known_block(key: str) -> None:
+    if key not in {b["key"] for b in _schedule_cfg()["blocks"]}:
+        raise HTTPException(404, f"no block {key!r}")
+
+
+@app.post("/schedule/log", response_class=HTMLResponse)
+def schedule_log(
+    request: Request,
+    day: str = Form(...),
+    key: str = Form(...),
+    note: str = Form(""),
+    conn=Depends(get_db),
+):
+    """Mark a block done by hand. Any block, auto ones included."""
+    when = _parse_day(day)
+    _known_block(key)
+    db.log_block(conn, when.isoformat(), key, note.strip() or None, "ui")
+    return templates.TemplateResponse(
+        request, "_schedule_body.html", _schedule_context(conn, when)
+    )
+
+
+@app.post("/schedule/clear", response_class=HTMLResponse)
+def schedule_clear(
+    request: Request, day: str = Form(...), key: str = Form(...), conn=Depends(get_db)
+):
+    when = _parse_day(day)
+    db.clear_block(conn, when.isoformat(), key)
+    return templates.TemplateResponse(
+        request, "_schedule_body.html", _schedule_context(conn, when)
+    )
 
 
 @app.get("/profile", response_class=HTMLResponse)

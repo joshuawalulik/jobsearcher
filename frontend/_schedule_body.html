@@ -1,0 +1,105 @@
+{# The day's blocks, its adherence and the week around it. Reloaded every
+   minute so the "now" marker moves, and swapped in whole by log/clear. #}
+{% set a = today.adherence %}
+<div class="kpis">
+  <div class="stat">
+    <span class="stat-label">{% if today.is_today %}So far today{% else %}This day{% endif %}</span>
+    <span class="stat-value">{% if a.pct is not none %}{{ a.pct }}%{% else %}—{% endif %}</span>
+    <span class="stat-sub">{{ a.done }} of {{ a.planned }} blocks done{% if a.partial %}, {{ a.partial }} partial{% endif %}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">This week</span>
+    <span class="stat-value">{% if week.pct is not none %}{{ week.pct }}%{% else %}—{% endif %}</span>
+    <span class="stat-sub">{{ week.days | selectattr('pct', 'ne', none) | list | length }} of {{ week.days | length }} days in</span>
+  </div>
+  {% for t in week.targets[:3] %}
+  <div class="stat">
+    <span class="stat-label">{{ t.label }}</span>
+    <span class="stat-value">{{ t.done }}<span class="stat-of">/{{ t.target }}</span></span>
+    <span class="stat-sub">this week</span>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not today.workday %}
+<p class="hint">Rest day. The week's numbers are below; nothing is planned today.</p>
+{% elif today.is_today and up_next %}
+<p class="now-line">
+  {% if up_next.status == 'now' %}<span class="live-dot"></span>Now: <strong>{{ up_next.label }}</strong> until {{ up_next.end }}
+  {% else %}Up next at {{ up_next.start }}: <strong>{{ up_next.label }}</strong>{% endif %}
+  <span class="meta">· {{ clock }}</span>
+</p>
+{% elif today.is_today and today.blocks %}
+<p class="now-line meta">The day's blocks are over. {{ clock }}</p>
+{% endif %}
+
+{% if today.blocks %}
+<ol class="sched">
+  {% for b in today.blocks %}
+  <li class="sched-row {{ b.status }}">
+    <span class="sched-time">{{ b.start }}<br><span class="meta">{{ b.end }}</span></span>
+    <div class="sched-main">
+      <div class="sched-title">
+        <h2>{{ b.label }}</h2>
+        <span class="pill status-{{ b.status }}">
+          {%- if b.status == 'done' %}Done
+          {%- elif b.status == 'partial' %}Partial
+          {%- elif b.status == 'now' %}Now
+          {%- elif b.status == 'upcoming' %}Later
+          {%- elif b.status == 'planned' %}Planned
+          {%- else %}Missed{% endif -%}
+        </span>
+        {% if b.kind != 'manual' and b.target > 1 %}<span class="meta">{{ b.count }} of {{ b.target }}</span>{% endif %}
+      </div>
+      {% if b.detail %}<p class="sched-detail">{{ b.detail }}</p>{% endif %}
+      {% if b.evidence %}
+      <ul class="evidence">{% for line in b.evidence %}<li>{{ line }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if b.logged %}
+      <p class="evidence-note">Marked done{% if b.logged_by == 'claude' %} from Claude{% endif %}{% if b.note %}: {{ b.note }}{% endif %}</p>
+      {% endif %}
+    </div>
+    <div class="sched-act">
+      {% if b.logged %}
+      <form hx-post="/schedule/clear" hx-target="#schedule-body" hx-swap="innerHTML">
+        <input type="hidden" name="day" value="{{ today.day }}">
+        <input type="hidden" name="key" value="{{ b.key }}">
+        <button class="sm" type="submit">Undo</button>
+      </form>
+      {% elif b.status != 'done' and b.status != 'planned' %}
+      <form class="log-form" hx-post="/schedule/log" hx-target="#schedule-body" hx-swap="innerHTML">
+        <input type="hidden" name="day" value="{{ today.day }}">
+        <input type="hidden" name="key" value="{{ b.key }}">
+        <input type="text" name="note" placeholder="Note (optional)" aria-label="Note for {{ b.label }}">
+        <button class="sm" type="submit">Mark done</button>
+      </form>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+{% endif %}
+
+<section class="panel">
+  <h2>Week of {{ week.week_start[5:] | replace('-', '/') }}</h2>
+  <div class="week-strip">
+    {% for d in week.days %}
+    <a class="week-day {% if d.is_today %}today{% endif %} {% if d.future %}future{% endif %} {% if d.day == today.day %}sel{% endif %}"
+       href="/schedule?day={{ d.day }}">
+      <span class="week-name">{{ d.weekday | capitalize }}</span>
+      <span class="week-pct">{% if d.pct is not none %}{{ d.pct }}%{% elif d.future %}·{% else %}—{% endif %}</span>
+      <span class="meta">{{ d.done }}/{{ d.planned }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="meters">
+    {% for t in week.targets %}
+    <div class="meter-row">
+      <span class="meter-label">{{ t.label }}</span>
+      <div class="meter"><div class="meter-fill" style="width: {{ t.pct }}%"></div></div>
+      <span class="meter-value">{{ t.done }} of {{ t.target }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="hint">Applications and outreach come from the tracker and contacts; prep blocks are what you marked done here or from a Claude chat. Edit the plan in <code>config/profile.yaml</code> under <code>schedule:</code>.</p>
+</section>
