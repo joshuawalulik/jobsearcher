@@ -424,3 +424,54 @@ button.view-tab.active { background: var(--accent-soft); color: var(--accent); f
 .app-card h3 { padding-right: 34px; }
 .card-score { position: absolute; top: 8px; right: 10px; }
 .lane.lane-quiet { flex: 0 1 150px; min-width: 150px; }
+
+/* --- schedule --- */
+.sched-head .day-nav { display: inline-flex; gap: 10px; margin-left: 6px; font-size: 13px; }
+.sched-head .day-nav a { text-decoration: none; }
+.stat-of { font: 600 18px var(--title); color: var(--muted); }
+.now-line { margin: 10px 0 4px; font-size: 14px; }
+.now-line strong { color: var(--ink); }
+.sched { list-style: none; margin: 8px 0 0; padding: 0; }
+.sched-row {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) 260px; gap: 0 16px;
+  padding: 11px 10px; border-bottom: 1px solid var(--line); border-left: 2px solid transparent;
+}
+.sched-row.now { background: var(--card); border-left-color: var(--accent); }
+.sched-row.done .sched-title h2, .sched-row.done .sched-detail { color: var(--muted); }
+.sched-row.planned, .sched-row.upcoming { color: var(--body); }
+.sched-time { font: 600 14px var(--title); color: var(--ink); line-height: 1.3; }
+.sched-time .meta { font: 12px var(--sans); }
+.sched-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sched-title h2 { font: 600 17px/1.25 var(--title); margin: 0; }
+.sched-detail { margin: 3px 0 0; font-size: 13px; color: var(--body); max-width: 70ch; }
+.evidence { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--muted); }
+.evidence li { margin: 1px 0; }
+.evidence-note { margin: 6px 0 0; font-size: 13px; color: var(--good); }
+.pill {
+  display: inline-block; border-radius: 3px; padding: 0 5px; line-height: 19px;
+  font-size: 12px; font-weight: 600; background: var(--line); color: var(--muted); white-space: nowrap;
+}
+.pill.status-done { background: var(--good-soft); color: var(--good); }
+.pill.status-now { background: var(--accent-soft); color: var(--accent); }
+.pill.status-partial { background: var(--line); color: var(--ink); }
+.pill.status-missed { color: var(--bad); background: transparent; border: 1px solid var(--line-strong); }
+.sched-act { display: flex; justify-content: flex-end; align-items: flex-start; }
+.log-form { display: flex; gap: 6px; }
+.log-form input[type=text] { width: 150px; height: 27px; font-size: 13px; }
+.week-strip { display: flex; gap: 6px; margin: 4px 0 14px; }
+.week-day {
+  flex: 1 1 0; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 5px;
+  color: var(--ink); text-decoration: none;
+}
+.week-day:hover { border-color: var(--line-strong); }
+.week-day.sel { border-color: var(--accent); }
+.week-day.future { color: var(--muted); }
+.week-name { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.week-pct { font: 600 22px/1.1 var(--title); }
+.week-day.today .week-name { color: var(--accent); }
+.meter-label { font-size: 13px; }
+@media (max-width: 900px) {
+  .sched-row { grid-template-columns: 56px minmax(0, 1fr); }
+  .sched-act { grid-column: 2; justify-content: flex-start; margin-top: 6px; }
+}

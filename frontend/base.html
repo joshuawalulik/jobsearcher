@@ -17,6 +17,7 @@
     <span class="brand">Job Search</span>
     <a href="/" {% if active == 'matches' %}class="active"{% endif %}>Matches</a>
     <a href="/tracker" {% if active == 'tracker' %}class="active"{% endif %}>Tracker</a>
+    <a href="/schedule" {% if active == 'schedule' %}class="active"{% endif %}>Schedule</a>
     <a href="/contacts" {% if active == 'contacts' %}class="active"{% endif %}>Contacts<span class="nav-count" hx-get="/contacts/due-count" hx-trigger="load, contactsChanged from:body" hx-swap="innerHTML"></span></a>
     <a href="/analytics" {% if active == 'analytics' %}class="active"{% endif %}>Analytics</a>
     <a href="/rejected" {% if active == 'rejected' %}class="active"{% endif %}>Rejected</a>
