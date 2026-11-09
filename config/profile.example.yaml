@@ -162,7 +162,7 @@ schedule:             # the daily plan on /schedule; adherence is measured again
       start: "09:00"
       end: "09:30"
       kind: triage
-      detail: Due today, new replies and the 8:30 sweep.
+      detail: Due today, new replies and the 8:30 sweep, then pick the day's 2 jobs and 3 contacts.
     - key: outreach
       label: Outreach and referrals
       start: "09:30"
@@ -190,12 +190,6 @@ schedule:             # the daily plan on /schedule; adherence is measured again
       kind: manual
       detail: One system design topic at a time.
       themed: true          # detail follows themes: below
-    - key: shutdown
-      label: Shut down
-      start: "16:30"
-      end: "16:45"
-      kind: manual
-      detail: Pick tomorrow's 2 jobs and 3 contacts, then stop for the day.
   themes:                 # the themed block's focus by weekday
     mon: Learn a system design concept.
     tue: Do a full design problem.
@@ -214,8 +208,6 @@ schedule:             # the daily plan on /schedule; adherence is measured again
         end: "15:45"
         detail: Go over the week's numbers and adjust next week's plan.
         themed: false
-      shutdown:
-        drop: true
   weekly_targets:         # shown as progress, never enforced
     applications: 9       # moved to applied or ready (skips count as decided, not here)
     outreach_new: 15      # first messages to new contacts
