@@ -62,7 +62,7 @@ mcp = MCPServer(
         "Daily schedule: today_plan shows the day's time blocks with status "
         "and this week's targets; use it when the user asks what to do now "
         "or how the day is going. Applications and outreach blocks fill in "
-        "from the tracker; prep blocks (coding, prep, shutdown) are done only "
+        "from the tracker; prep blocks (coding, prep) are done only "
         "when logged, so call log_block with a short note after running a "
         "prep session in chat or when the user says a block is done. Never "
         "log a block the user didn't do."
