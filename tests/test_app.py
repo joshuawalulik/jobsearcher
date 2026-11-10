@@ -156,7 +156,7 @@ def test_score_strip_skips_breakdowns_without_categories():
 
 
 @pytest.mark.parametrize("hour, minute, expected", [
-    (7, 0, "8:30"), (8, 30, "16:30"), (12, 0, "16:30"), (18, 40, "8:30"),
+    (7, 0, "8:30 AM"), (8, 30, "4:30 PM"), (12, 0, "4:30 PM"), (18, 40, "8:30 AM"),
 ])
 def test_next_sweep_label(hour, minute, expected):
     now = datetime(2026, 11, 5, hour, minute)

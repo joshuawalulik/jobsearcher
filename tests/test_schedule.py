@@ -153,7 +153,7 @@ class TestStatus:
         built = schedule.build_day(CFG, MON, activity, [], at(MON, "12:00"))
         triage = {b["key"]: b for b in built["blocks"]}["triage"]
         assert triage["status"] == "done"
-        assert triage["evidence"] == ["3 jobs dismissed", "Sweep ran 08:31"]
+        assert triage["evidence"] == ["3 jobs dismissed", "Sweep ran 8:31 AM"]
 
     def test_sweep_alone_is_not_triage(self):
         activity = {**EMPTY, "sweeps": [{"day": MON.isoformat(), "at": "08:31:04"}]}
