@@ -35,7 +35,7 @@ from scrapers.sweep import load_profile
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 PROFILE_PATH = profile_io.PROFILE_PATH
 REJECTED_ROWS_PER_GATE = 100
-SWEEP_TIMES = ((8 * 60 + 30, "8:30"), (16 * 60 + 30, "16:30"))  # launchd schedule
+SWEEP_TIMES = ((8 * 60 + 30, "8:30 AM"), (16 * 60 + 30, "4:30 PM"))  # launchd schedule
 VIEW_DECIDE, VIEW_ALL = "decide", "all"  # Matches views; decide is the default
 FEED_PAGE = 50  # rows per load; paging mechanics, not a preference
 DISMISSED_ROWS = 100
@@ -260,7 +260,7 @@ def _last_sweep(conn) -> dict | None:
     if not stamp:
         return None
     swept = _utc(stamp)
-    return {"local": swept.astimezone().strftime("%a %H:%M"), "ago": _ago(stamp)}
+    return {"local": swept.astimezone().strftime("%a %-I:%M %p"), "ago": _ago(stamp)}
 
 
 def _last_run(conn) -> dict | None:

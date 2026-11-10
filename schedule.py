@@ -39,6 +39,13 @@ def _hhmm(value: str) -> time:
     return time(int(hour), int(minute))
 
 
+def ampm(value: str) -> str:
+    """Display form of an "HH:MM" string: "16:30" -> "4:30 PM"."""
+    at = _hhmm(value)
+    hour = at.hour % 12 or 12
+    return f"{hour}:{at.minute:02d} {'AM' if at.hour < 12 else 'PM'}"
+
+
 def weekday_key(day: str | date) -> str:
     return WEEKDAYS[_to_date(day).weekday()]
 
@@ -125,7 +132,7 @@ def _evidence_for(block: Mapping, day: str, activity: Mapping) -> tuple[int, lis
                    if i["day"] == day and i["direction"] == "in"]
         if inbound:
             lines.append(f"{len(inbound)} repl{'ies' if len(inbound) != 1 else 'y'} logged")
-        sweeps = [s["at"][:5] for s in activity.get("sweeps", ()) if s["day"] == day]
+        sweeps = [ampm(s["at"][:5]) for s in activity.get("sweeps", ()) if s["day"] == day]
         if sweeps:
             lines.append("Sweep ran " + ", ".join(sweeps))
         return count, lines
@@ -162,6 +169,8 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
         auto = block["kind"] != "manual"
         blocks.append({
             **block,
+            "start": ampm(block["start"]),
+            "end": ampm(block["end"]),
             "status": status,
             "count": count if auto else (1 if log else 0),
             "evidence": lines,
