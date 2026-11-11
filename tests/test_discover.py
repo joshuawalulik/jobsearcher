@@ -33,6 +33,13 @@ def test_slug_candidates_variants():
     assert candidates.index("springhealth") < candidates.index("spring")
 
 
+def test_slug_candidates_tries_glued_inc_suffix():
+    # StubHub's board token is "stubhubinc"; a name that already ends in
+    # a suffix word doesn't get a second one.
+    assert discover.slug_candidates("StubHub")[-1] == "stubhubinc"
+    assert "acmeincinc" not in discover.slug_candidates("Acme Inc")
+
+
 def _not_found(slug, **kw):
     raise common.BoardNotFound(f"404 for {slug}")
 
