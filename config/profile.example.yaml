@@ -150,6 +150,8 @@ schedule:             # the daily plan on /schedule; adherence is measured again
   workdays: [mon, tue, wed, thu, fri]
   # Blocks in day order. kind says how a block gets marked done:
   #   triage        — a job dismissed or tracked, or a reply suggestion handled
+  # all_day: true marks a block that runs through the day (Triage): it lists
+  # its evidence but is never done, partial or missed, and stays out of adherence.
   #   outreach      — outbound interactions logged that day (new + follow-ups)
   #   applications  — tracked jobs moved to ready, applied or skipped that day
   #   manual        — you mark it done on /schedule, or Claude logs it through
@@ -159,10 +161,9 @@ schedule:             # the daily plan on /schedule; adherence is measured again
   blocks:
     - key: triage
       label: Triage
-      start: "09:00"
-      end: "09:30"
+      all_day: true         # runs through the day: shows what happened, never done or missed
       kind: triage
-      detail: Due today, new replies and the 8:30 sweep, then pick the day's 2 jobs and 3 contacts.
+      detail: Due today, new replies and the sweeps as they land; pick the day's 2 jobs and 3 contacts first thing.
     - key: outreach
       label: Outreach and referrals
       start: "09:30"

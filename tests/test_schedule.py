@@ -21,7 +21,7 @@ from app import app, get_db
 CFG = {
     "workdays": ["mon", "tue", "wed", "thu", "fri"],
     "blocks": [
-        {"key": "triage", "label": "Triage", "start": "09:00", "end": "09:30", "kind": "triage"},
+        {"key": "triage", "label": "Triage", "all_day": True, "kind": "triage"},
         {"key": "outreach", "label": "Outreach", "start": "09:30", "end": "10:30",
          "kind": "outreach", "target": 3},
         {"key": "applications", "label": "Applications", "start": "10:30", "end": "12:30",
@@ -105,7 +105,7 @@ class TestStatus:
 
     def test_clock_splits_the_day(self):
         s = self._statuses(at(MON, "10:00"))
-        assert s["triage"] == "missed"
+        assert s["triage"] == "ongoing"
         assert s["outreach"] == "now"
         assert s["applications"] == "upcoming"
         assert s["shutdown"] == "upcoming"
@@ -152,12 +152,25 @@ class TestStatus:
                     "sweeps": [{"day": MON.isoformat(), "at": "08:31:04"}]}
         built = schedule.build_day(CFG, MON, activity, [], at(MON, "12:00"))
         triage = {b["key"]: b for b in built["blocks"]}["triage"]
-        assert triage["status"] == "done"
+        assert triage["status"] == "ongoing"
+        assert triage["count"] == 3
         assert triage["evidence"] == ["3 jobs dismissed", "Sweep ran 8:31 AM"]
+        assert triage["start"] is None and triage["all_day"]
 
-    def test_sweep_alone_is_not_triage(self):
+    def test_all_day_block_is_never_done_or_missed(self):
+        # Triage runs through the day, so nothing, a sweep alone, or a log
+        # all read as ongoing, and the clock never flips it.
         activity = {**EMPTY, "sweeps": [{"day": MON.isoformat(), "at": "08:31:04"}]}
-        assert self._statuses(at(MON, "12:00"), activity)["triage"] == "missed"
+        assert self._statuses(at(MON, "12:00"), activity)["triage"] == "ongoing"
+        assert self._statuses(at(TUE, "12:00"))["triage"] == "ongoing"      # a past day
+        logs = [{"day": MON.isoformat(), "block_key": "triage", "note": None, "source": "ui"}]
+        assert self._statuses(at(MON, "17:00"), logs=logs)["triage"] == "ongoing"
+
+    def test_all_day_block_stays_out_of_adherence(self):
+        built = schedule.build_day(CFG, MON, EMPTY, [], at(MON, "17:00"))
+        a = built["adherence"]
+        assert a["planned"] == 5 and a["elapsed"] == 5 and a["pct"] == 0
+        assert len(built["blocks"]) == 6
 
     def test_log_marks_any_block_done(self):
         logs = [{"day": MON.isoformat(), "block_key": "coding", "note": "graphs", "source": "claude"},
@@ -180,7 +193,7 @@ class TestStatus:
 
     def test_past_day_ignores_the_clock(self):
         built = schedule.build_day(CFG, MON, EMPTY, [], at(TUE, "09:10"))
-        assert {b["status"] for b in built["blocks"]} == {"missed"}
+        assert {b["status"] for b in built["blocks"] if not b["all_day"]} == {"missed"}
 
 
 class TestAdherence:
@@ -189,6 +202,10 @@ class TestAdherence:
                   {"status": "upcoming"}]
         a = schedule.adherence(blocks)
         assert a == {"done": 1, "partial": 1, "elapsed": 3, "planned": 4, "pct": 50}
+
+    def test_ongoing_blocks_are_not_planned(self):
+        blocks = [{"status": "ongoing", "all_day": True}, {"status": "done"}]
+        assert schedule.adherence(blocks) == {"done": 1, "partial": 0, "elapsed": 1, "planned": 1, "pct": 100}
 
     def test_nothing_elapsed_is_undefined(self):
         assert schedule.adherence([{"status": "upcoming"}])["pct"] is None

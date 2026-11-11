@@ -507,7 +507,8 @@ def _schedule_day(conn, cfg: dict, day: str) -> dict:
 
 @_contact_tool
 def today_plan(day: str | None = None) -> dict:
-    """The day's schedule blocks with status (done/partial/now/upcoming/missed),
+    """The day's schedule blocks with status (done/partial/now/upcoming/missed;
+    ongoing for the all-day triage block, which is never done or missed),
     the evidence behind each, and this week's targets.
 
     Applications and outreach blocks fill themselves from the tracker and

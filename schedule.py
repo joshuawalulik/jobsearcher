@@ -13,6 +13,8 @@ Block status for a day:
     upcoming  later today
     missed    over, nothing to show
     planned   a future day
+    ongoing   an all_day block (triage) on today or a past day: it lists what
+              happened and is never done or missed, and adherence skips it
 
 Adherence counts done as 1 and partial as half, over the blocks planned.
 """
@@ -165,12 +167,19 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
     for block in day_plan(cfg, day):
         count, lines = _evidence_for(block, iso, activity)
         log = by_key.get(block["key"])
-        status = _status(block, day, today, now, count, log is not None)
+        all_day = bool(block.get("all_day"))
+        if all_day:
+            # Runs through the day (triage): it shows what happened and is
+            # never done or missed, so the clock and the log don't apply.
+            status = "planned" if day > today else "ongoing"
+        else:
+            status = _status(block, day, today, now, count, log is not None)
         auto = block["kind"] != "manual"
         blocks.append({
             **block,
-            "start": ampm(block["start"]),
-            "end": ampm(block["end"]),
+            "all_day": all_day,
+            "start": None if all_day else ampm(block["start"]),
+            "end": None if all_day else ampm(block["end"]),
             "status": status,
             "count": count if auto else (1 if log else 0),
             "evidence": lines,
@@ -189,11 +198,15 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
 
 
 def adherence(blocks: list[Mapping]) -> dict:
-    """done = 1, partial = ½, over every block of the day that has started."""
-    counted = [b for b in blocks if b["status"] not in ("planned", "upcoming", "now")]
+    """done = 1, partial = ½, over every timed block of the day that has started.
+
+    All-day blocks (status ongoing) are neither planned nor counted.
+    """
+    timed = [b for b in blocks if b["status"] != "ongoing" and not b.get("all_day")]
+    counted = [b for b in timed if b["status"] not in ("planned", "upcoming", "now")]
     done = sum(1 for b in counted if b["status"] == "done")
     partial = sum(1 for b in counted if b["status"] == "partial")
-    planned = len(blocks)
+    planned = len(timed)
     scored = done + 0.5 * partial
     return {
         "done": done,
