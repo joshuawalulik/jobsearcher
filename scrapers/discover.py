@@ -37,6 +37,10 @@ def slug_candidates(name: str) -> list[str]:
         candidates += ["".join(trimmed), "-".join(trimmed)]
     if len(words) > 1:
         candidates.append(words[0])
+    # Some companies register the board under their legal name with the
+    # suffix glued on (StubHub's token is "stubhubinc"), so try that too.
+    if words and words[-1] not in ("inc", "labs", "co", "corp", "health"):
+        candidates.append("".join(words) + "inc")
     seen: set[str] = set()
     return [c for c in candidates if c and not (c in seen or seen.add(c))]
 
