@@ -37,7 +37,7 @@
 <ol class="sched">
   {% for b in today.blocks %}
   <li class="sched-row {{ b.status }}">
-    <span class="sched-time">{{ b.start }}<br><span class="meta">{{ b.end }}</span></span>
+    <span class="sched-time">{% if b.all_day %}<span class="meta">All day</span>{% else %}{{ b.start }}<br><span class="meta">{{ b.end }}</span>{% endif %}</span>
     <div class="sched-main">
       <div class="sched-title">
         <h2>{{ b.label }}</h2>
@@ -47,6 +47,7 @@
           {%- elif b.status == 'now' %}Now
           {%- elif b.status == 'upcoming' %}Later
           {%- elif b.status == 'planned' %}Planned
+          {%- elif b.status == 'ongoing' %}Ongoing
           {%- else %}Missed{% endif -%}
         </span>
         {% if b.kind != 'manual' and b.target > 1 %}<span class="meta">{{ b.count }} of {{ b.target }}</span>{% endif %}
@@ -60,7 +61,8 @@
       {% endif %}
     </div>
     <div class="sched-act">
-      {% if b.logged %}
+      {% if b.all_day %}
+      {% elif b.logged %}
       <form hx-post="/schedule/clear" hx-target="#schedule-body" hx-swap="innerHTML">
         <input type="hidden" name="day" value="{{ today.day }}">
         <input type="hidden" name="key" value="{{ b.key }}">
