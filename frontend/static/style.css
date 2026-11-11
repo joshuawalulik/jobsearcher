@@ -447,6 +447,7 @@ button.view-tab.active { background: var(--accent-soft); color: var(--accent); f
 .evidence { margin: 6px 0 0; padding-left: 16px; font-size: 13px; color: var(--muted); }
 .evidence li { margin: 1px 0; }
 .evidence-note { margin: 6px 0 0; font-size: 13px; color: var(--good); }
+.evidence.note-lines { margin-top: 2px; color: var(--good); }
 .pill {
   display: inline-block; border-radius: 3px; padding: 0 5px; line-height: 19px;
   font-size: 12px; font-weight: 600; background: var(--line); color: var(--muted); white-space: nowrap;

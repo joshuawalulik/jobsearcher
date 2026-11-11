@@ -57,7 +57,11 @@
       <ul class="evidence">{% for line in b.evidence %}<li>{{ line }}</li>{% endfor %}</ul>
       {% endif %}
       {% if b.logged %}
-      <p class="evidence-note">Marked done{% if b.logged_by == 'claude' %} from Claude{% endif %}{% if b.note %}: {{ b.note }}{% endif %}</p>
+      {% set note_lines = b.note.splitlines() if b.note else [] %}
+      <p class="evidence-note">Marked done{% if b.logged_by == 'claude' %} from Claude{% endif %}{% if note_lines|length == 1 %}: {{ note_lines[0] }}{% elif note_lines %}:{% endif %}</p>
+      {% if note_lines|length > 1 %}
+      <ul class="evidence note-lines">{% for line in note_lines %}<li>{{ line }}</li>{% endfor %}</ul>
+      {% endif %}
       {% endif %}
     </div>
     <div class="sched-act">
