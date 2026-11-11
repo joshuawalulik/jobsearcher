@@ -399,3 +399,24 @@ class TestConnector:
         with pytest.raises(Exception) as err:
             asyncio.run(mcp_server.mcp.call_tool("log_block", {"block_key": "nap"}))
         assert "no block 'nap'" in str(err.value)
+
+
+class TestNoteRendering:
+    def test_multi_line_note_renders_as_a_list(self, client):
+        client.db.execute(
+            "INSERT INTO day_log (day, block_key, note, source) VALUES (?, ?, ?, ?)",
+            ("2026-11-09", "coding", "Python track\nIf-Else\nDivision", "claude"),
+        )
+        client.db.commit()
+        html = client.get("/schedule/body?day=2026-11-09").text
+        assert "Marked done from Claude:" in html
+        assert html.count("<li>") >= 3 and "<li>Division</li>" in html
+
+    def test_single_line_note_stays_inline(self, client):
+        client.db.execute(
+            "INSERT INTO day_log (day, block_key, note, source) VALUES (?, ?, ?, ?)",
+            ("2026-11-09", "coding", "graphs", "ui"),
+        )
+        client.db.commit()
+        html = client.get("/schedule/body?day=2026-11-09").text
+        assert "Marked done: graphs" in html and "note-lines" not in html
