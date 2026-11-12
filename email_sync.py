@@ -458,8 +458,16 @@ def route(msg: dict, decision: dict, apps: list[dict], cfg: dict) -> tuple[dict 
     return app, note
 
 
+def imap_timeout(cfg: dict) -> float:
+    """Seconds any IMAP connect or read may take (email.imap_timeout_seconds)."""
+    return float(cfg.get("imap_timeout_seconds", 60))
+
+
 def _connect(cfg: dict, secrets: dict) -> imaplib.IMAP4_SSL:
-    conn = imaplib.IMAP4_SSL(cfg["imap_host"])
+    # A stalled Gmail socket once held an autosweep open for 28 hours, and
+    # launchd skips a run while the previous one is alive, so every IMAP
+    # read gets a deadline instead of waiting forever.
+    conn = imaplib.IMAP4_SSL(cfg["imap_host"], timeout=imap_timeout(cfg))
     conn.login(secrets["username"], secrets["app_password"])
     return conn
 
