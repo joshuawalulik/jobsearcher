@@ -347,7 +347,7 @@ td.tt a:hover { color: var(--accent); }
   transform: rotate(-45deg); transition: transform 0.15s;
 }
 details[open] > summary::before { transform: rotate(45deg); }
-.next-action { display: flex; gap: 5px; }
+.next-action { display: flex; gap: 5px; overflow-wrap: anywhere; }
 .next-action svg.i { width: 13px; height: 13px; margin-top: 2px; color: var(--muted); }
 .modal-details svg.i, .email-history svg.i, .suggestion-mail svg.i, .p-actions svg.i, td svg.i { width: 12px; height: 12px; vertical-align: -1px; }
 .app-card .num { font: 600 16px var(--title); }
