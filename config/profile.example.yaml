@@ -330,6 +330,9 @@ contact_sync:         # contacts' mail -> interaction log, after each autosweep
 email:                # inbox → tracker suggestions (creds in git-ignored config/secrets.yaml)
   enabled: true       # needs config/secrets.yaml (the UI explains when it's missing)
   imap_host: imap.gmail.com
+  # Deadline on every IMAP connect and read, so a stalled Gmail socket
+  # can't hold a sweep open (launchd skips a run while the last is alive).
+  imap_timeout_seconds: 60
   folder: INBOX
   lookback_days: 14
   # Only these lanes are matched against the inbox (considering/ready =

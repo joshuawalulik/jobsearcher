@@ -794,3 +794,26 @@ def test_load_secrets_missing_or_incomplete(tmp_path):
     full = tmp_path / "full.yaml"
     full.write_text("gmail:\n  username: me@gmail.com\n  app_password: 'x y'\n")
     assert email_sync.load_secrets(full) == {"username": "me@gmail.com", "app_password": "x y"}
+
+
+def test_imap_timeout_reads_the_profile_and_defaults_to_a_minute():
+    assert email_sync.imap_timeout({"imap_timeout_seconds": 15}) == 15.0
+    assert email_sync.imap_timeout({}) == 60.0
+
+
+def test_connect_passes_the_timeout_to_imaplib(monkeypatch):
+    seen = {}
+
+    class FakeIMAP:
+        def __init__(self, host, timeout=None):
+            seen["host"], seen["timeout"] = host, timeout
+
+        def login(self, user, password):
+            seen["login"] = user
+
+    monkeypatch.setattr(email_sync.imaplib, "IMAP4_SSL", FakeIMAP)
+    email_sync._connect(
+        {"imap_host": "imap.example.com", "imap_timeout_seconds": 20},
+        {"username": "alex@example.com", "app_password": "x"},
+    )
+    assert seen == {"host": "imap.example.com", "timeout": 20.0, "login": "alex@example.com"}

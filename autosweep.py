@@ -48,11 +48,12 @@ def main() -> None:
     try:
         db.init_db(conn)
         summary = sweep_and_rescore(conn, profile)
-        print(sweep.format_summary(summary["sweep"]))
+        print(sweep.format_summary(summary["sweep"]), flush=True)
         rescored = summary["rescore"]
         print(
             f"Rescored {rescored['total']} jobs: {rescored['passed']} passed gates, "
-            f"{rescored['rejected']} rejected."
+            f"{rescored['rejected']} rejected.",
+            flush=True,
         )
         _email_sync(conn, profile)
         _contact_sync(conn, profile)
@@ -67,9 +68,9 @@ def _email_sync(conn, profile: dict) -> None:
     if not (profile.get("email") or {}).get("enabled") or secrets is None:
         return
     try:
-        print(email_sync.format_summary(email_sync.sync(conn, profile, secrets=secrets)))
+        print(email_sync.format_summary(email_sync.sync(conn, profile, secrets=secrets)), flush=True)
     except Exception as exc:
-        print(f"Email sync failed: {exc}")
+        print(f"Email sync failed: {exc}", flush=True)
 
 
 def _contact_sync(conn, profile: dict) -> None:
@@ -79,9 +80,9 @@ def _contact_sync(conn, profile: dict) -> None:
     if not (profile.get("contact_sync") or {}).get("enabled") or secrets is None:
         return
     try:
-        print(contact_sync.format_summary(contact_sync.sync(conn, profile, secrets=secrets)))
+        print(contact_sync.format_summary(contact_sync.sync(conn, profile, secrets=secrets)), flush=True)
     except Exception as exc:
-        print(f"Contact mail sync failed: {exc}")
+        print(f"Contact mail sync failed: {exc}", flush=True)
 
 
 if __name__ == "__main__":
