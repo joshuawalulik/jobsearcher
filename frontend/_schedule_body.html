@@ -10,7 +10,7 @@
   <div class="stat">
     <span class="stat-label">This week</span>
     <span class="stat-value">{% if week.pct is not none %}{{ week.pct }}%{% else %}—{% endif %}</span>
-    <span class="stat-sub">{{ week.days | selectattr('pct', 'ne', none) | list | length }} of {{ week.days | length }} days in</span>
+    <span class="stat-sub">{{ week.days | selectattr('pct', 'ne', none) | list | length }} of {{ week.days | rejectattr('off_day') | list | length }} days in</span>
   </div>
   {% for t in week.targets[:3] %}
   <div class="stat">
@@ -22,7 +22,13 @@
 </div>
 
 {% if not today.workday %}
-<p class="hint">Rest day. The week's numbers are below; nothing is planned today.</p>
+<p class="hint">Rest day. Nothing is planned{% if today.is_today %} today{% endif %}{% if today.off_day_evidence %}, but the records show work{% endif %}.</p>
+{% if today.off_day_evidence %}
+<section class="panel off-day">
+  <h2>Off the clock</h2>
+  <ul class="evidence">{% for line in today.off_day_evidence %}<li>{{ line }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
 {% elif today.is_today and up_next %}
 <p class="now-line">
   {% if up_next.status == 'now' %}<span class="live-dot"></span>Now: <strong>{{ up_next.label }}</strong> until {{ up_next.end }}
@@ -90,11 +96,16 @@
   <h2>Week of {{ week.week_start[5:] | replace('-', '/') }}</h2>
   <div class="week-strip">
     {% for d in week.days %}
-    <a class="week-day {% if d.is_today %}today{% endif %} {% if d.future %}future{% endif %} {% if d.day == today.day %}sel{% endif %}"
+    <a class="week-day {% if d.is_today %}today{% endif %} {% if d.future %}future{% endif %} {% if d.day == today.day %}sel{% endif %} {% if d.off_day %}off{% endif %}"
        href="/schedule?day={{ d.day }}">
       <span class="week-name">{{ d.weekday | capitalize }}</span>
+      {% if d.off_day %}
+      <span class="week-pct">off</span>
+      <span class="meta">{{ d.item_count }} item{% if d.item_count != 1 %}s{% endif %}</span>
+      {% else %}
       <span class="week-pct">{% if d.pct is not none %}{{ d.pct }}%{% elif d.future %}·{% else %}—{% endif %}</span>
       <span class="meta">{{ d.done }}/{{ d.planned }}</span>
+      {% endif %}
     </a>
     {% endfor %}
   </div>

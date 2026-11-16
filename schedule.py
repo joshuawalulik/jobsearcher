@@ -141,6 +141,28 @@ def _evidence_for(block: Mapping, day: str, activity: Mapping) -> tuple[int, lis
     return 0, []
 
 
+def off_day_evidence(cfg: Mapping, day: str, activity: Mapping,
+                     logs: list[Mapping]) -> list[str]:
+    """What happened on a rest day: the same records the blocks read, in one
+    list. Sweeps are left out because launchd ran them, not the user."""
+    lines: list[str] = []
+    kinds = {
+        "applications": {"key": "applications", "kind": "applications", "target": 1},
+        "outreach": {"key": "outreach", "kind": "outreach", "target": 1},
+        "triage": {"key": "triage", "kind": "triage", "target": 1},
+    }
+    for block in kinds.values():
+        _, found = _evidence_for(block, day, activity)
+        lines.extend(line for line in found if not line.startswith("Sweep ran"))
+    labels = {b["key"]: b["label"] for b in cfg["blocks"]}
+    for row in logs:
+        if row["day"] != day:
+            continue
+        label = labels.get(row["block_key"], row["block_key"])
+        lines.append(f"{label}: {row['note']}" if row.get("note") else f"{label} marked done")
+    return lines
+
+
 def _status(block: Mapping, day: date, today: date, now: datetime | None,
             count: int, logged: bool) -> str:
     if logged or count >= block["target"]:
@@ -187,13 +209,16 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
             "note": log["note"] if log else None,
             "logged_by": log["source"] if log else None,
         })
+    workday = bool(blocks) or is_workday(cfg, day)
     return {
         "day": iso,
         "weekday": weekday_key(day),
-        "workday": bool(blocks) or is_workday(cfg, day),
+        "workday": workday,
         "is_today": day == today,
         "blocks": blocks,
         "adherence": adherence(blocks),
+        # A rest day still shows what you did, without a score.
+        "off_day_evidence": [] if workday else off_day_evidence(cfg, iso, activity, logs),
     }
 
 
@@ -260,14 +285,17 @@ def build_week(cfg: Mapping, day: str | date, activity: Mapping,
     days = []
     for offset in range(7):
         d = monday + timedelta(days=offset)
-        if not is_workday(cfg, d):
-            continue
         built = build_day(cfg, d, activity, logs, now)
+        off_day = not built["workday"]
+        if off_day and not built["off_day_evidence"]:
+            continue  # a quiet weekend day stays out of the strip
         days.append({
             "day": built["day"],
             "weekday": built["weekday"],
             "is_today": built["is_today"],
             "future": d > now.date(),
+            "off_day": off_day,
+            "item_count": len(built["off_day_evidence"]),
             "pct": built["adherence"]["pct"],
             "done": built["adherence"]["done"],
             "planned": built["adherence"]["planned"],

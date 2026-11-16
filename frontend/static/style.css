@@ -471,6 +471,8 @@ button.view-tab.active { background: var(--accent-soft); color: var(--accent); f
 .week-name { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .week-pct { font: 600 22px/1.1 var(--title); }
 .week-day.today .week-name { color: var(--accent); }
+.week-day.off .week-pct { font: 600 14px/1.6 var(--body); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.panel.off-day .evidence { margin-top: 2px; color: var(--text); }
 .meter-label { font-size: 13px; }
 @media (max-width: 900px) {
   .sched-row { grid-template-columns: 56px minmax(0, 1fr); }

@@ -256,6 +256,39 @@ class TestWeek:
         assert {t["key"]: t for t in week["targets"]}["coding"]["pct"] == 100
 
 
+class TestOffDay:
+    SUN = date(2026, 11, 15)
+
+    def test_rest_day_lists_its_work_without_a_score(self):
+        activity = {**EMPTY,
+                    "lane_moves": [move(self.SUN, 7, "ready -> applied", title="FS Eng", company="Globex")],
+                    "interactions": [touch(self.SUN, 1)],
+                    "sweeps": [{"day": self.SUN.isoformat(), "at": "08:30:00"}]}
+        logs = [{"day": self.SUN.isoformat(), "block_key": "coding", "note": "two kata", "source": "claude"}]
+        built = schedule.build_day(CFG, self.SUN, activity, logs, at(self.SUN, "20:00"))
+        assert not built["workday"] and built["blocks"] == []
+        assert built["adherence"]["pct"] is None
+        assert built["off_day_evidence"] == [
+            "Globex — FS Eng: applied",
+            "Pat at Globex: new message",
+            "Coding prep: two kata",
+        ]
+
+    def test_workday_has_no_off_day_evidence(self):
+        activity = {**EMPTY, "lane_moves": [move(MON, 7, "ready -> applied")]}
+        built = schedule.build_day(CFG, MON, activity, [], at(MON, "20:00"))
+        assert built["workday"] and built["off_day_evidence"] == []
+
+    def test_week_strip_shows_a_weekend_day_only_when_it_has_work(self):
+        activity = {**EMPTY, "lane_moves": [move(self.SUN, 7, "ready -> applied")]}
+        week = schedule.build_week(CFG, MON, activity, [], at(self.SUN, "20:00"))
+        assert [d["weekday"] for d in week["days"]] == ["mon", "tue", "wed", "thu", "fri", "sun"]
+        sunday = week["days"][-1]
+        assert sunday["off_day"] and sunday["item_count"] == 1 and sunday["pct"] is None
+        assert not week["days"][0]["off_day"]
+        assert "sat" not in [d["weekday"] for d in week["days"]]
+
+
 # --- database -----------------------------------------------------------------
 
 
@@ -339,7 +372,27 @@ class TestRoutes:
         fri = client.get("/schedule?day=2026-11-13").text
         assert "Mock interview" in fri and "Shut down" not in fri
         sun = client.get("/schedule?day=2026-11-15").text
-        assert "Rest day" in sun
+        assert "Rest day" in sun and "Off the clock" not in sun
+
+    def test_sunday_with_an_application_shows_it(self, client):
+        cid = client.db.execute(
+            "INSERT INTO companies (name, ats_type, slug, active) VALUES ('Globex', 'manual', 'globex', 0)"
+        ).lastrowid
+        jid = client.db.execute(
+            "INSERT INTO jobs (company_id, external_id, title, gate_failed) VALUES (?, 'm1', 'FS Eng', 0)", (cid,)
+        ).lastrowid
+        app_id = db.create_application(client.db, jid)
+        client.db.execute(
+            "UPDATE events SET occurred_at = '2026-11-15 20:00:00' WHERE application_id = ?", (app_id,)
+        )
+        client.db.execute(
+            "INSERT INTO events (application_id, type, detail, occurred_at) VALUES (?, 'lane_change', 'ready -> applied', '2026-11-15 21:47:06')",
+            (app_id,),
+        )
+        client.db.commit()
+        sun = client.get("/schedule?day=2026-11-15").text
+        assert "Off the clock" in sun and "Globex — FS Eng: applied" in sun
+        assert "week-day" in sun and ">off<" in sun
 
     def test_bad_day_is_400_and_bad_key_404(self, client):
         assert client.get("/schedule?day=yesterday").status_code == 400
