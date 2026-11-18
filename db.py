@@ -210,6 +210,15 @@ CREATE TABLE IF NOT EXISTS day_log (
     UNIQUE (day, block_key)
 );
 
+-- A whole day excused from the schedule (travel, sick, holiday): its
+-- blocks are shown but not scored, and the week average skips it.
+CREATE TABLE IF NOT EXISTS day_excused (
+    day         TEXT PRIMARY KEY,
+    reason      TEXT NOT NULL,
+    source      TEXT NOT NULL CHECK (source IN ('ui', 'claude')),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Explicit link for when a recruiter submits the user to a specific req.
 CREATE TABLE IF NOT EXISTS contact_applications (
     contact_id      INTEGER NOT NULL REFERENCES contacts(id),
@@ -1340,6 +1349,35 @@ def fetch_day_logs(conn: sqlite3.Connection, start: str, end: str) -> list[sqlit
         " WHERE day BETWEEN ? AND ? ORDER BY day, id",
         (start, end),
     ).fetchall()
+
+
+def excuse_day(conn: sqlite3.Connection, day: str, reason: str, source: str) -> None:
+    """Excuse a whole day (travel, sick). Re-excusing replaces the reason."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("an excused day needs a reason")
+    conn.execute(
+        "INSERT INTO day_excused (day, reason, source) VALUES (?, ?, ?)"
+        " ON CONFLICT(day) DO UPDATE SET reason = excluded.reason, source = excluded.source",
+        (day, reason, source),
+    )
+    conn.commit()
+
+
+def clear_excuse(conn: sqlite3.Connection, day: str) -> bool:
+    cur = conn.execute("DELETE FROM day_excused WHERE day = ?", (day,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def fetch_excused(conn: sqlite3.Connection, start: str, end: str) -> dict[str, str]:
+    """{day: reason} for excused days in start..end inclusive."""
+    return {
+        row["day"]: row["reason"]
+        for row in conn.execute(
+            "SELECT day, reason FROM day_excused WHERE day BETWEEN ? AND ?", (start, end)
+        )
+    }
 
 
 def fetch_schedule_activity(conn: sqlite3.Connection, start: str, end: str) -> dict:
