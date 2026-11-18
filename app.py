@@ -1019,10 +1019,11 @@ def _schedule_context(conn, day: date) -> dict:
     start, end = monday.isoformat(), sunday.isoformat()
     activity = db.fetch_schedule_activity(conn, start, end)
     logs = [dict(r) for r in db.fetch_day_logs(conn, start, end)]
-    today = schedule.build_day(cfg, day, activity, logs, now)
+    excuses = db.fetch_excused(conn, start, end)
+    today = schedule.build_day(cfg, day, activity, logs, now, excuses.get(day.isoformat()))
     return {
         "today": today,
-        "week": schedule.build_week(cfg, day, activity, logs, now),
+        "week": schedule.build_week(cfg, day, activity, logs, now, excuses),
         "up_next": schedule.next_block(today["blocks"]),
         "day_label": day.strftime("%A, %b %-d") + ("" if day.year == now.year else f", {day.year}"),
         "prev_day": (day - timedelta(days=1)).isoformat(),
@@ -1074,6 +1075,30 @@ def schedule_clear(
 ):
     when = _parse_day(day)
     db.clear_block(conn, when.isoformat(), key)
+    return templates.TemplateResponse(
+        request, "_schedule_body.html", _schedule_context(conn, when)
+    )
+
+
+@app.post("/schedule/excuse", response_class=HTMLResponse)
+def schedule_excuse(
+    request: Request, day: str = Form(...), reason: str = Form(""), conn=Depends(get_db)
+):
+    """Take a whole day off the clock (travel, sick): shown, never scored."""
+    when = _parse_day(day)
+    try:
+        db.excuse_day(conn, when.isoformat(), reason, "ui")
+    except ValueError as err:
+        raise HTTPException(422, str(err))
+    return templates.TemplateResponse(
+        request, "_schedule_body.html", _schedule_context(conn, when)
+    )
+
+
+@app.post("/schedule/unexcuse", response_class=HTMLResponse)
+def schedule_unexcuse(request: Request, day: str = Form(...), conn=Depends(get_db)):
+    when = _parse_day(day)
+    db.clear_excuse(conn, when.isoformat())
     return templates.TemplateResponse(
         request, "_schedule_body.html", _schedule_context(conn, when)
     )

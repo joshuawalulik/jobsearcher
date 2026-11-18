@@ -289,6 +289,33 @@ class TestOffDay:
         assert "sat" not in [d["weekday"] for d in week["days"]]
 
 
+class TestExcusedDay:
+    def test_excused_day_shows_evidence_but_scores_nothing(self):
+        activity = {**EMPTY, "lane_moves": [move(TUE, 7, "ready -> applied"), move(TUE, 8, "ready -> applied")]}
+        built = schedule.build_day(CFG, TUE, activity, [], at(TUE, "20:00"), excused="Traveling")
+        by = {b["key"]: b for b in built["blocks"]}
+        assert built["excused"] == "Traveling"
+        assert by["applications"]["status"] == "done"      # the records say it happened
+        assert by["outreach"]["status"] == "excused"
+        assert by["coding"]["status"] == "excused" and by["prep"]["status"] == "excused"
+        assert by["triage"]["status"] == "ongoing"
+        assert built["adherence"]["pct"] is None and built["adherence"]["done"] == 1
+
+    def test_blank_excuse_is_no_excuse(self):
+        built = schedule.build_day(CFG, TUE, EMPTY, [], at(TUE, "20:00"), excused="  ")
+        assert built["excused"] is None
+        assert built["adherence"]["pct"] == 0
+
+    def test_week_average_skips_an_excused_day(self):
+        logs = [{"day": MON.isoformat(), "block_key": k, "note": None, "source": "ui"}
+                for k in ("outreach", "applications", "coding", "prep", "shutdown")]
+        week = schedule.build_week(CFG, TUE, EMPTY, logs, at(TUE, "20:00"),
+                                   excuses={TUE.isoformat(): "Traveling"})
+        assert week["days"][0]["pct"] == 100
+        assert week["days"][1]["excused"] == "Traveling" and week["days"][1]["pct"] is None
+        assert week["pct"] == 100
+
+
 # --- database -----------------------------------------------------------------
 
 
@@ -360,7 +387,33 @@ def client(tmp_path):
     conn.close()
 
 
+class TestExcuseStore:
+    def test_excuse_replaces_reason_and_clears(self, conn):
+        db.excuse_day(conn, "2026-11-17", "Traveling", "ui")
+        db.excuse_day(conn, "2026-11-17", "Travel day", "claude")
+        assert db.fetch_excused(conn, "2026-11-16", "2026-11-22") == {"2026-11-17": "Travel day"}
+        assert db.clear_excuse(conn, "2026-11-17") and not db.clear_excuse(conn, "2026-11-17")
+        assert db.fetch_excused(conn, "2026-11-16", "2026-11-22") == {}
+
+    def test_excuse_needs_a_reason(self, conn):
+        with pytest.raises(ValueError):
+            db.excuse_day(conn, "2026-11-17", "  ", "ui")
+
+
 class TestRoutes:
+    def test_excuse_and_undo_a_day(self, client):
+        r = client.post("/schedule/excuse", data={"day": "2026-11-10", "reason": "Traveling"})
+        assert r.status_code == 200
+        assert "Excused day: <strong>Traveling</strong>" in r.text
+        assert ">Excused<" in r.text and "Excuse day" not in r.text
+        page = client.get("/schedule?day=2026-11-09").text   # same week, another day
+        assert ">away<" in page and "Traveling" in page
+        r = client.post("/schedule/unexcuse", data={"day": "2026-11-10"})
+        assert "Excused day" not in r.text and "Excuse day" in r.text
+
+    def test_excuse_without_reason_is_422(self, client):
+        assert client.post("/schedule/excuse", data={"day": "2026-11-10", "reason": " "}).status_code == 422
+
     def test_page_renders_a_workday(self, client):
         r = client.get("/schedule?day=2026-11-09")
         assert r.status_code == 200
@@ -446,6 +499,13 @@ class TestConnector:
         prep = {b["key"]: b for b in plan["blocks"]}["prep"]
         assert prep["status"] == "done" and prep["note"] == "URL shortener"
         row = mcp_db.execute("SELECT source FROM day_log").fetchone()
+        assert row["source"] == "claude"
+
+    def test_excuse_day_from_claude(self, mcp_db):
+        plan = call("excuse_day", reason="Traveling", day="2026-11-10")
+        assert plan["excused"] == "Traveling" and plan["adherence"]["pct"] is None
+        assert {b["status"] for b in plan["blocks"]} <= {"excused", "ongoing", "done"}
+        row = mcp_db.execute("SELECT source FROM day_excused").fetchone()
         assert row["source"] == "claude"
 
     def test_unknown_block_is_refused_with_reason(self, mcp_db):

@@ -5,12 +5,12 @@
   <div class="stat">
     <span class="stat-label">{% if today.is_today %}So far today{% else %}This day{% endif %}</span>
     <span class="stat-value">{% if a.pct is not none %}{{ a.pct }}%{% else %}—{% endif %}</span>
-    <span class="stat-sub">{{ a.done }} of {{ a.planned }} blocks done{% if a.partial %}, {{ a.partial }} partial{% endif %}</span>
+    <span class="stat-sub">{% if today.excused %}Excused: {{ today.excused }}{% else %}{{ a.done }} of {{ a.planned }} blocks done{% if a.partial %}, {{ a.partial }} partial{% endif %}{% endif %}</span>
   </div>
   <div class="stat">
     <span class="stat-label">This week</span>
     <span class="stat-value">{% if week.pct is not none %}{{ week.pct }}%{% else %}—{% endif %}</span>
-    <span class="stat-sub">{{ week.days | selectattr('pct', 'ne', none) | list | length }} of {{ week.days | rejectattr('off_day') | list | length }} days in</span>
+    <span class="stat-sub">{{ week.days | selectattr('pct', 'ne', none) | list | length }} of {{ week.days | rejectattr('off_day') | rejectattr('excused') | list | length }} days in</span>
   </div>
   {% for t in week.targets[:3] %}
   <div class="stat">
@@ -21,7 +21,13 @@
   {% endfor %}
 </div>
 
-{% if not today.workday %}
+{% if today.excused %}
+<form class="excused-line" hx-post="/schedule/unexcuse" hx-target="#schedule-body" hx-swap="innerHTML">
+  <input type="hidden" name="day" value="{{ today.day }}">
+  <span>Excused day: <strong>{{ today.excused }}</strong>. Nothing is scored and the week average skips it.</span>
+  <button class="sm" type="submit">Undo</button>
+</form>
+{% elif not today.workday %}
 <p class="hint">Rest day. Nothing is planned{% if today.is_today %} today{% endif %}{% if today.off_day_evidence %}, but the records show work{% endif %}.</p>
 {% if today.off_day_evidence %}
 <section class="panel off-day">
@@ -54,6 +60,7 @@
           {%- elif b.status == 'upcoming' %}Later
           {%- elif b.status == 'planned' %}Planned
           {%- elif b.status == 'ongoing' %}Ongoing
+          {%- elif b.status == 'excused' %}Excused
           {%- else %}Missed{% endif -%}
         </span>
         {% if b.kind != 'manual' and b.target > 1 %}<span class="meta">{{ b.count }} of {{ b.target }}</span>{% endif %}
@@ -90,18 +97,29 @@
   </li>
   {% endfor %}
 </ol>
+{% if not today.excused and not (today.is_today and up_next) %}
+<form class="excuse-form" hx-post="/schedule/excuse" hx-target="#schedule-body" hx-swap="innerHTML">
+  <input type="hidden" name="day" value="{{ today.day }}">
+  <span class="meta">Away this day?</span>
+  <input type="text" name="reason" placeholder="Traveling, sick, holiday" aria-label="Reason the day is excused" required>
+  <button class="sm" type="submit">Excuse day</button>
+</form>
+{% endif %}
 {% endif %}
 
 <section class="panel">
   <h2>Week of {{ week.week_start[5:] | replace('-', '/') }}</h2>
   <div class="week-strip">
     {% for d in week.days %}
-    <a class="week-day {% if d.is_today %}today{% endif %} {% if d.future %}future{% endif %} {% if d.day == today.day %}sel{% endif %} {% if d.off_day %}off{% endif %}"
-       href="/schedule?day={{ d.day }}">
+    <a class="week-day {% if d.is_today %}today{% endif %} {% if d.future %}future{% endif %} {% if d.day == today.day %}sel{% endif %} {% if d.off_day %}off{% endif %} {% if d.excused %}excused{% endif %}"
+       {% if d.excused %}data-excused{% endif %} href="/schedule?day={{ d.day }}">
       <span class="week-name">{{ d.weekday | capitalize }}</span>
       {% if d.off_day %}
       <span class="week-pct">off</span>
       <span class="meta">{{ d.item_count }} item{% if d.item_count != 1 %}s{% endif %}</span>
+      {% elif d.excused %}
+      <span class="week-pct">away</span>
+      <span class="meta week-reason" title="{{ d.excused }}">{{ d.excused }}</span>
       {% else %}
       <span class="week-pct">{% if d.pct is not none %}{{ d.pct }}%{% elif d.future %}·{% else %}—{% endif %}</span>
       <span class="meta">{{ d.done }}/{{ d.planned }}</span>

@@ -65,7 +65,9 @@ mcp = MCPServer(
         "from the tracker; prep blocks (coding, prep) are done only "
         "when logged, so call log_block with a short note after running a "
         "prep session in chat or when the user says a block is done. Never "
-        "log a block the user didn't do."
+        "log a block the user didn't do. When the user says a whole day was "
+        "lost to travel, illness or a holiday, call excuse_day with that "
+        "reason instead of logging blocks: the day shows but isn't scored."
     ),
 )
 
@@ -486,13 +488,15 @@ def _schedule_day(conn, cfg: dict, day: str) -> dict:
     monday, sunday = schedule.week_bounds(day)
     activity = db.fetch_schedule_activity(conn, monday.isoformat(), sunday.isoformat())
     logs = [dict(r) for r in db.fetch_day_logs(conn, monday.isoformat(), sunday.isoformat())]
-    built = schedule.build_day(cfg, day, activity, logs, now)
-    week = schedule.build_week(cfg, day, activity, logs, now)
+    excuses = db.fetch_excused(conn, monday.isoformat(), sunday.isoformat())
+    built = schedule.build_day(cfg, day, activity, logs, now, excuses.get(day))
+    week = schedule.build_week(cfg, day, activity, logs, now, excuses)
     nxt = schedule.next_block(built["blocks"])
     return {
         "day": built["day"],
         "weekday": built["weekday"],
         "workday": built["workday"],
+        "excused": built["excused"],
         "now": now.strftime("%H:%M"),
         "up_next": nxt["key"] if nxt else None,
         "adherence": built["adherence"],
@@ -539,6 +543,23 @@ def log_block(block_key: str, note: str | None = None, day: str | None = None) -
     try:
         db.log_block(conn, when, block_key, (note or "").strip() or None, "claude")
         return _schedule_day(conn, cfg, when)
+    finally:
+        conn.close()
+
+
+@_contact_tool
+def excuse_day(reason: str, day: str | None = None) -> dict:
+    """Take a whole day off the schedule's clock (default today) with a short
+    reason such as 'Traveling' or 'Sick'. Its blocks still show what the
+    records saw, a block the records show done stays done, nothing else is
+    scored, and the week average skips the day. Use it only when the user
+    says the day was lost; a day with some work done gets log_block instead.
+    """
+    when = outreach.iso_date(day or _today())
+    conn = _connect()
+    try:
+        db.excuse_day(conn, when, reason, "claude")
+        return _schedule_day(conn, _schedule_cfg(), when)
     finally:
         conn.close()
 

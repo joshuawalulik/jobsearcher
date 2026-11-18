@@ -179,9 +179,15 @@ def _status(block: Mapping, day: date, today: date, now: datetime | None,
 
 
 def build_day(cfg: Mapping, day: str | date, activity: Mapping,
-              logs: list[Mapping], now: datetime) -> dict:
-    """One day's blocks with status, evidence and adherence."""
+              logs: list[Mapping], now: datetime, excused: str | None = None) -> dict:
+    """One day's blocks with status, evidence and adherence.
+
+    excused is the reason the whole day is off the clock (travel, sick):
+    blocks still show their evidence, a block the records show done stays
+    done, every other timed block reads 'excused', and the day gets no score.
+    """
     day = _to_date(day)
+    excused = (excused or "").strip() or None
     today = now.date()
     iso = day.isoformat()
     by_key = {row["block_key"]: row for row in logs if row["day"] == iso}
@@ -196,6 +202,8 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
             status = "planned" if day > today else "ongoing"
         else:
             status = _status(block, day, today, now, count, log is not None)
+            if excused and status != "done":
+                status = "excused"
         auto = block["kind"] != "manual"
         blocks.append({
             **block,
@@ -210,13 +218,17 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
             "logged_by": log["source"] if log else None,
         })
     workday = bool(blocks) or is_workday(cfg, day)
+    adh = adherence(blocks)
+    if excused:
+        adh = {**adh, "elapsed": 0, "pct": None}
     return {
         "day": iso,
         "weekday": weekday_key(day),
         "workday": workday,
         "is_today": day == today,
+        "excused": excused,
         "blocks": blocks,
-        "adherence": adherence(blocks),
+        "adherence": adh,
         # A rest day still shows what you did, without a score.
         "off_day_evidence": [] if workday else off_day_evidence(cfg, iso, activity, logs),
     }
@@ -228,7 +240,7 @@ def adherence(blocks: list[Mapping]) -> dict:
     All-day blocks (status ongoing) are neither planned nor counted.
     """
     timed = [b for b in blocks if b["status"] != "ongoing" and not b.get("all_day")]
-    counted = [b for b in timed if b["status"] not in ("planned", "upcoming", "now")]
+    counted = [b for b in timed if b["status"] not in ("planned", "upcoming", "now", "excused")]
     done = sum(1 for b in counted if b["status"] == "done")
     partial = sum(1 for b in counted if b["status"] == "partial")
     planned = len(timed)
@@ -278,14 +290,20 @@ _TARGET_LABELS = {
 
 
 def build_week(cfg: Mapping, day: str | date, activity: Mapping,
-               logs: list[Mapping], now: datetime) -> dict:
-    """The week around day: a per-day adherence strip and weekly targets."""
+               logs: list[Mapping], now: datetime,
+               excuses: Mapping[str, str] | None = None) -> dict:
+    """The week around day: a per-day adherence strip and weekly targets.
+
+    excuses maps ISO day -> reason for excused days, which show in the strip
+    but carry no score, so the week average skips them.
+    """
     monday, sunday = week_bounds(day)
+    excuses = excuses or {}
     labels = {b["key"]: b["label"] for b in cfg["blocks"]}
     days = []
     for offset in range(7):
         d = monday + timedelta(days=offset)
-        built = build_day(cfg, d, activity, logs, now)
+        built = build_day(cfg, d, activity, logs, now, excuses.get(d.isoformat()))
         off_day = not built["workday"]
         if off_day and not built["off_day_evidence"]:
             continue  # a quiet weekend day stays out of the strip
@@ -295,6 +313,7 @@ def build_week(cfg: Mapping, day: str | date, activity: Mapping,
             "is_today": built["is_today"],
             "future": d > now.date(),
             "off_day": off_day,
+            "excused": built["excused"],
             "item_count": len(built["off_day_evidence"]),
             "pct": built["adherence"]["pct"],
             "done": built["adherence"]["done"],
