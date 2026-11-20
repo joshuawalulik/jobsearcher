@@ -994,16 +994,31 @@ def _render_contact_modal(request, conn, contact_id, cfg, *, warnings=(), error=
     )
 
 
+def _conversation_file(name: str) -> Path | None:
+    """The saved conversation with this name, found among the .md files
+    that exist under CONVERSATIONS_DIR, or None.
+
+    The requested name is only compared with those files' names. It is
+    never made into a path, so no address can reach a file anywhere else.
+    """
+    root = CONVERSATIONS_DIR.resolve()
+    try:
+        for path in root.rglob("*.md"):
+            if path.relative_to(root).as_posix() != name:
+                continue
+            # A link placed in the folder must not lead out of it either.
+            if path.is_file() and path.resolve().is_relative_to(root):
+                return path
+    except OSError:
+        return None
+    return None
+
+
 @app.get("/conversations/{name:path}", response_class=HTMLResponse)
 def conversation_page(name: str, request: Request):
     """One saved conversation. Only .md files under CONVERSATIONS_DIR."""
-    root = CONVERSATIONS_DIR.resolve()
-    try:
-        path = (root / name).resolve()
-        found = path.suffix == ".md" and path.is_relative_to(root) and path.is_file()
-    except (ValueError, OSError):  # a null byte, a name too long for the disk
-        found = False
-    if not found:
+    path = _conversation_file(name)
+    if path is None:
         raise HTTPException(status_code=404, detail="no such conversation")
     return templates.TemplateResponse(
         request,

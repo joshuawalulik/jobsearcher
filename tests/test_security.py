@@ -223,6 +223,23 @@ def test_every_kind_of_response_carries_the_headers(site):
             assert response.headers.get(name) == value, f"{kind} is missing {name}"
 
 
+def test_a_conversation_is_looked_up_never_made_into_a_path(site, tmp_path):
+    """The address is compared with the files that exist; it never becomes a path."""
+    outside = tmp_path / "outside.md"
+    outside.write_text("# private")
+    (site.conversations / "leads").mkdir()
+    (site.conversations / "leads" / "pat.md").write_text("# Pat")
+    (site.conversations / "notes.txt").write_text("not a conversation")
+    (site.conversations / "link.md").symlink_to(outside)  # a link out of the folder
+    assert site.get("/conversations/leads/pat.md").status_code == 200
+    for name in ("outside.md", "../outside.md", "leads/../../outside.md", "link.md",
+                 "notes.txt", "leads", "leads/", "leads/pat.md/", "LEADS/pat.md",
+                 "leads//pat.md", "leads/%2e/pat.md", str(outside), str(outside).lstrip("/")):
+        response = site.get(f"/conversations/{name}")
+        assert response.status_code == 404, name
+        assert "private" not in response.text
+
+
 def test_refusals_and_errors_are_never_cached(site):
     """A cache in front of the app must not serve one visitor's refusal to the next."""
     refused = [

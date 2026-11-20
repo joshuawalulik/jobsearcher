@@ -267,6 +267,18 @@ def test_reset_with_nothing_to_reset_is_harmless(client):
     assert demo.ensure_seed().exists()
 
 
+def test_a_token_is_looked_up_never_made_into_a_path(demo_on, monkeypatch):
+    """Whatever the cookie says, the only files touched are ones found by
+    listing the sandbox folder."""
+    token = demo.create_sandbox("a")
+    assert demo._sandbox_file(token) == demo.sandbox_dir() / f"{token}.db"
+    monkeypatch.setattr(demo, "_TOKEN", __import__("re").compile(r"(.*)"))  # even unchecked
+    seed = demo.ensure_seed()
+    for value in (f"../{seed.stem}", str(seed.with_suffix("")), f"./{token}", f"{token}/..",
+                  token.upper(), "..", "\x00"):
+        assert demo._sandbox_file(value) is None, value
+
+
 def test_reset_cannot_delete_outside_the_sandbox_folder(demo_on):
     seed = demo.ensure_seed()
     for value in (seed.stem, f"../{seed.stem}", str(seed.with_suffix("")), "..", ""):
@@ -292,7 +304,7 @@ def test_the_everyday_app_has_no_reset_and_sets_no_cookie():
 def test_an_unused_sandbox_disappears_after_an_hour(demo_on):
     token = demo.create_sandbox("a", now=T0)
     path = demo.sandbox_dir() / f"{token}.db"
-    assert demo.sandbox(token, now=T0 + demo.IDLE_SECONDS - 5) == path.resolve()
+    assert demo.sandbox(token, now=T0 + demo.IDLE_SECONDS - 5) == path
     # That use counted: the hour starts again from it.
     assert demo.sandbox(token, now=T0 + 2 * demo.IDLE_SECONDS - 10) is not None
     assert demo.sandbox(token, now=T0 + 3 * demo.IDLE_SECONDS) is None

@@ -222,12 +222,23 @@ def client_key(host: str | None) -> str:
 
 
 def _sandbox_file(token: str | None) -> Path | None:
-    """Where this token's sandbox would be, or None if it isn't one of ours."""
+    """This token's sandbox, found among the files that exist, or None.
+
+    What a visitor sends is only ever compared with names already in the
+    sandbox folder. It is never made into a path, so no cookie value can
+    point the app at a file anywhere else.
+    """
     if not token or not _TOKEN.fullmatch(token):
         return None
-    folder = sandbox_dir().resolve()
-    path = (folder / f"{token}.db").resolve()
-    return path if path.parent == folder else None
+    wanted = f"{token}.db"
+    try:
+        with os.scandir(sandbox_dir()) as entries:
+            for entry in entries:
+                if entry.name == wanted:
+                    return Path(entry.path)
+    except OSError:  # no sandbox folder yet
+        pass
+    return None
 
 
 def _expired(token: str, used: float, now: float) -> bool:
