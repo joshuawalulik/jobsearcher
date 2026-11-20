@@ -497,11 +497,12 @@ def _schedule_day(conn, cfg: dict, day: str) -> dict:
         "weekday": built["weekday"],
         "workday": built["workday"],
         "excused": built["excused"],
+        "focus": built["focus"],
         "now": now.strftime("%H:%M"),
         "up_next": nxt["key"] if nxt else None,
         "adherence": built["adherence"],
         "blocks": [
-            {k: b[k] for k in ("key", "label", "start", "end", "kind", "detail",
+            {k: b.get(k) for k in ("key", "label", "start", "end", "kind", "detail",
                                "status", "count", "target", "evidence", "logged", "note")}
             for b in built["blocks"]
         ],
@@ -535,10 +536,10 @@ def log_block(block_key: str, note: str | None = None, day: str | None = None) -
     Logging twice keeps the block done and appends the note.
     """
     cfg = _schedule_cfg()
-    keys = {b["key"] for b in cfg["blocks"]}
+    when = outreach.iso_date(day or _today())
+    keys = schedule.block_keys(cfg, when)
     if block_key not in keys:
         raise ValueError(f"no block {block_key!r}; blocks are {sorted(keys)}")
-    when = outreach.iso_date(day or _today())
     conn = _connect()
     try:
         db.log_block(conn, when, block_key, (note or "").strip() or None, "claude")

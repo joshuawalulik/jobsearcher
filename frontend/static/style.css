@@ -460,6 +460,7 @@ button.view-tab.active { background: var(--accent-soft); color: var(--accent); f
 .pill.status-missed { color: var(--bad); background: transparent; border: 1px solid var(--line-strong); }
 .pill.status-excused { color: var(--muted); background: transparent; border: 1px solid var(--line); }
 .sched-row.excused .sched-title h2, .sched-row.excused .sched-detail { color: var(--muted); }
+.day-focus { margin: 8px 0 12px; font: 600 15px/1.4 var(--sans); color: var(--ink); }
 .excused-line, .excuse-form { display: flex; align-items: center; gap: 10px; margin: 8px 0 12px; font-size: 14px; }
 .excuse-form input[type=text] { width: 220px; }
 .week-day.excused .week-pct { font: 600 14px/1.6 var(--body); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }

@@ -1,7 +1,9 @@
 """Daily schedule: the plan from profile.yaml schedule: against what happened.
 
 Pure functions like gates.py and score.py. The plan is a list of time blocks
-per weekday (with per-day overrides and a themed block whose focus rotates);
+per weekday (with per-day overrides and a themed block whose focus rotates),
+and a dated plan replaces it on one calendar day (a weekend of interview
+prep, an interview day);
 what happened comes from db.fetch_schedule_activity (lane moves, dismissals,
 outreach interactions, sweeps) plus day_log rows for blocks marked done by
 hand or from a Claude chat. Nothing here reads the database or the clock.
@@ -62,8 +64,46 @@ def week_bounds(day: str | date) -> tuple[date, date]:
     return monday, monday + timedelta(days=6)
 
 
+def dated_plan(cfg: Mapping, day: str | date) -> Mapping | None:
+    """The dated: entry for this calendar day, if one exists.
+
+    dated: is a list (not a mapping keyed by date) so the public example
+    profile never needs real dates as keys. YAML may read an unquoted day
+    as a date, so both forms compare by ISO string.
+    """
+    iso = _to_date(day).isoformat()
+    for entry in cfg.get("dated") or ():
+        if str(entry.get("day")) == iso:
+            return entry
+    return None
+
+
+def _dated_blocks(cfg: Mapping, entry: Mapping) -> list[dict]:
+    """A dated plan's blocks. A key that names a base block inherits its
+    fields (so `- key: triage` is enough); weekday overrides and themes
+    don't apply, because a dated plan says exactly what the day is."""
+    base = {b["key"]: b for b in cfg["blocks"]}
+    plan = []
+    for item in entry.get("blocks") or ():
+        block = {**base.get(item["key"], {}), **item}
+        block.pop("themed", None)
+        if block.get("drop"):
+            continue
+        block.setdefault("kind", "manual")
+        block.setdefault("target", 1)
+        plan.append(block)
+    return plan
+
+
 def day_plan(cfg: Mapping, day: str | date) -> list[dict]:
-    """The blocks for one day, overrides and theme applied. Empty on a rest day."""
+    """The blocks for one day, overrides and theme applied. Empty on a rest day.
+
+    A dated plan for this calendar day replaces the weekday plan, on a rest
+    day too (a weekend of prep gets real blocks and a score).
+    """
+    entry = dated_plan(cfg, day)
+    if entry is not None:
+        return _dated_blocks(cfg, entry)
     if not is_workday(cfg, day):
         return []
     key = weekday_key(day)
@@ -81,6 +121,23 @@ def day_plan(cfg: Mapping, day: str | date) -> list[dict]:
         block.setdefault("target", 1)
         plan.append(block)
     return plan
+
+
+def block_keys(cfg: Mapping, day: str | date) -> set[str]:
+    """Keys that can be logged on this day: every base block plus the day's
+    dated blocks."""
+    return {b["key"] for b in cfg["blocks"]} | {b["key"] for b in day_plan(cfg, day)}
+
+
+def block_labels(cfg: Mapping) -> dict[str, str]:
+    """Display label per block key: base blocks first, then any key that only
+    a dated plan uses."""
+    labels = {b["key"]: b["label"] for b in cfg["blocks"]}
+    for entry in cfg.get("dated") or ():
+        for item in entry.get("blocks") or ():
+            if item.get("label"):
+                labels.setdefault(item["key"], item["label"])
+    return labels
 
 
 def _lane_to(detail: str) -> str:
@@ -154,7 +211,7 @@ def off_day_evidence(cfg: Mapping, day: str, activity: Mapping,
     for block in kinds.values():
         _, found = _evidence_for(block, day, activity)
         lines.extend(line for line in found if not line.startswith("Sweep ran"))
-    labels = {b["key"]: b["label"] for b in cfg["blocks"]}
+    labels = block_labels(cfg)
     for row in logs:
         if row["day"] != day:
             continue
@@ -227,6 +284,8 @@ def build_day(cfg: Mapping, day: str | date, activity: Mapping,
         "workday": workday,
         "is_today": day == today,
         "excused": excused,
+        # A dated plan's one-line title ("JPM prep: Kafka and front end").
+        "focus": (dated_plan(cfg, day) or {}).get("title"),
         "blocks": blocks,
         "adherence": adh,
         # A rest day still shows what you did, without a score.
@@ -299,7 +358,7 @@ def build_week(cfg: Mapping, day: str | date, activity: Mapping,
     """
     monday, sunday = week_bounds(day)
     excuses = excuses or {}
-    labels = {b["key"]: b["label"] for b in cfg["blocks"]}
+    labels = block_labels(cfg)
     days = []
     for offset in range(7):
         d = monday + timedelta(days=offset)

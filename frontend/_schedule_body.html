@@ -21,6 +21,9 @@
   {% endfor %}
 </div>
 
+{% if today.focus %}
+<p class="day-focus">{{ today.focus }}</p>
+{% endif %}
 {% if today.excused %}
 <form class="excused-line" hx-post="/schedule/unexcuse" hx-target="#schedule-body" hx-swap="innerHTML">
   <input type="hidden" name="day" value="{{ today.day }}">

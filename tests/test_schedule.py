@@ -533,3 +533,93 @@ class TestNoteRendering:
         client.db.commit()
         html = client.get("/schedule/body?day=2026-11-09").text
         assert "Marked done: graphs" in html and "note-lines" not in html
+
+
+# --- dated plans --------------------------------------------------------------
+
+DATED = {
+    **CFG,
+    "dated": [
+        {"day": "2026-11-14", "title": "Interview prep weekend",
+         "blocks": [
+             {"key": "coding", "start": "09:30", "end": "11:00", "detail": "Two problems."},
+             {"key": "kafka", "label": "Kafka drill", "start": "11:15", "end": "12:30"},
+         ]},
+        {"day": date(2026, 11, 10),   # YAML reads an unquoted day as a date
+         "blocks": [
+             {"key": "triage"},
+             {"key": "outreach", "target": 1},
+             {"key": "applications", "drop": True},
+             {"key": "prep", "label": "Interview", "start": "09:00", "end": "10:00"},
+         ]},
+    ],
+}
+
+
+class TestDatedPlan:
+    def test_dated_weekend_day_gets_its_blocks(self):
+        plan = schedule.day_plan(DATED, SAT)
+        assert [b["key"] for b in plan] == ["coding", "kafka"]
+        coding, kafka = plan
+        assert coding["label"] == "Coding prep" and coding["detail"] == "Two problems."
+        assert kafka["kind"] == "manual" and kafka["target"] == 1
+
+    def test_dated_weekday_inherits_base_and_drops(self):
+        plan = {b["key"]: b for b in schedule.day_plan(DATED, TUE)}
+        assert list(plan) == ["triage", "outreach", "prep"]
+        assert plan["triage"]["all_day"] and plan["outreach"]["target"] == 1
+        assert plan["outreach"]["start"] == "09:30"
+        assert plan["prep"]["label"] == "Interview"
+        assert plan["prep"]["detail"] == "One topic."  # no weekday theme on a dated day
+
+    def test_other_days_keep_the_weekday_plan(self):
+        assert [b["key"] for b in schedule.day_plan(DATED, MON)][:3] == ["triage", "outreach", "applications"]
+        assert schedule.day_plan(DATED, date(2026, 11, 15)) == []
+
+    def test_dated_weekend_is_scored_and_titled(self):
+        logs = [{"day": SAT.isoformat(), "block_key": "kafka", "note": "producer", "source": "ui"}]
+        built = schedule.build_day(DATED, SAT, EMPTY, logs, at(SAT, "13:00"))
+        assert built["workday"] and built["focus"] == "Interview prep weekend"
+        assert built["off_day_evidence"] == []
+        assert built["adherence"] == {"done": 1, "partial": 0, "elapsed": 2, "planned": 2, "pct": 50}
+
+    def test_week_strip_scores_the_dated_weekend_and_counts_coding(self):
+        logs = [{"day": SAT.isoformat(), "block_key": "coding", "note": None, "source": "ui"}]
+        week = schedule.build_week(DATED, SAT, EMPTY, logs, at(date(2026, 11, 16), "09:00"))
+        sat = {d["day"]: d for d in week["days"]}[SAT.isoformat()]
+        assert not sat["off_day"] and sat["pct"] == 50
+        coding = {t["key"]: t for t in week["targets"]}["coding"]
+        assert coding["done"] == 1
+
+    def test_block_keys_and_labels_include_dated_only_keys(self):
+        assert "kafka" in schedule.block_keys(DATED, SAT)
+        assert "kafka" not in schedule.block_keys(DATED, MON)
+        assert schedule.block_labels(DATED)["kafka"] == "Kafka drill"
+        assert schedule.block_labels(DATED)["coding"] == "Coding prep"
+
+
+class TestDatedRoutes:
+    @pytest.fixture(autouse=True)
+    def dated_cfg(self, monkeypatch):
+        import app as app_module
+        monkeypatch.setattr(app_module, "_schedule_cfg", lambda: DATED)
+        monkeypatch.setattr(mcp_server, "_schedule_cfg", lambda: DATED)
+
+    def test_page_shows_the_dated_weekend(self, client):
+        page = client.get("/schedule?day=2026-11-14").text
+        assert "Interview prep weekend" in page and "Kafka drill" in page
+        assert "Rest day" not in page
+
+    def test_dated_key_logs_on_its_day_only(self, client):
+        r = client.post("/schedule/log", data={"day": "2026-11-14", "key": "kafka", "note": "consumer"})
+        assert r.status_code == 200 and "Marked done: consumer" in r.text
+        assert client.post("/schedule/log", data={"day": "2026-11-09", "key": "kafka"}).status_code == 404
+
+    def test_connector_logs_a_dated_block(self, mcp_db):
+        plan = call("log_block", block_key="kafka", note="listener", day="2026-11-14")
+        assert plan["focus"] == "Interview prep weekend"
+        kafka = {b["key"]: b for b in plan["blocks"]}["kafka"]
+        assert kafka["status"] == "done"
+        with pytest.raises(Exception) as err:
+            asyncio.run(mcp_server.mcp.call_tool("log_block", {"block_key": "kafka", "day": "2026-11-09"}))
+        assert "no block 'kafka'" in str(err.value)

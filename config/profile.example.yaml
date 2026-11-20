@@ -209,6 +209,11 @@ schedule:             # the daily plan on /schedule; adherence is measured again
         end: "15:45"
         detail: Go over the week's numbers and adjust next week's plan.
         themed: false
+  # One-off plans for a calendar day, rest days included. Each entry replaces
+  # that day's weekday plan: {day: "YYYY-MM-DD", title, blocks}. A block key
+  # naming a base block inherits its fields; drop: true removes one; new keys
+  # (give them a label) are loggable only on their day.
+  dated: []
   weekly_targets:         # shown as progress, never enforced
     applications: 9       # moved to applied or ready (skips count as decided, not here)
     outreach_new: 15      # first messages to new contacts
