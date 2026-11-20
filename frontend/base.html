@@ -5,16 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Job Search Tool{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
+  {# No eval, no script tags from responses, no injected style block: the
+     content security policy would refuse them, so htmx is told not to try. #}
+  <meta name="htmx-config" content='{"allowEval": false, "allowScriptTags": false, "includeIndicatorStyles": false, "selfRequestsOnly": true}'>
   <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <svg class="sprite" width="0" height="0" aria-hidden="true"><defs>
     <symbol id="close" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></symbol>
     <symbol id="arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
     <symbol id="out" viewBox="0 0 16 16"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7.5 8.5"/></symbol>
   </defs></svg>
   <nav aria-label="Main">
     <span class="brand">Job Search</span>
+    {% if demo.ENABLED %}
+    <div class="demo-note">
+      <p>Demo. Every company, person and message here is made up. What you change is yours alone and clears after an hour unused.</p>
+      <form method="post" action="{{ demo.RESET_PATH }}"><button class="sm">Reset demo</button></form>
+    </div>
+    {% endif %}
     <a href="/" {% if active == 'matches' %}class="active"{% endif %}>Matches</a>
     <a href="/tracker" {% if active == 'tracker' %}class="active"{% endif %}>Tracker</a>
     <a href="/schedule" {% if active == 'schedule' %}class="active"{% endif %}>Schedule</a>
@@ -27,22 +37,6 @@
   <main>
     {% block content %}{% endblock %}
   </main>
-  <script>
-    // Clicking off a slide-over closes it. Clicking another card or row
-    // leaves it to swap in that item's panel instead.
-    document.addEventListener("click", function (evt) {
-      var overlay = document.querySelector(".modal-overlay");
-      if (!overlay || !document.contains(evt.target)) return;
-      if (evt.target.closest(".modal, .app-card, .contact-row")) return;
-      overlay.remove();
-      document.dispatchEvent(new Event("panelClosed"));
-    });
-    // Keyboard users land inside a panel when it opens.
-    document.addEventListener("htmx:afterSettle", function (evt) {
-      if (evt.detail.target.id !== "modal") return;
-      var panel = evt.detail.target.querySelector(".modal");
-      if (panel) { panel.tabIndex = -1; panel.focus({ preventScroll: true }); }
-    });
-  </script>
+  <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

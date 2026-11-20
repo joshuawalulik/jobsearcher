@@ -8,7 +8,7 @@ Verify with: ls ~/Library/Logs/Claude/mcp*.log
 """
 
 import json
-import subprocess
+import subprocess  # nosec B404: runs ps with fixed arguments
 import sys
 from pathlib import Path
 
@@ -22,7 +22,7 @@ ENTRY = {
 
 def claude_is_running() -> bool:
     # ps, not pgrep: pgrep can't always see other apps' processes here.
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 B607: fixed arguments
         ["ps", "-axo", "command"], capture_output=True, text=True
     )
     return any(

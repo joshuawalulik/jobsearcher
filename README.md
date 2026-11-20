@@ -101,6 +101,25 @@ description with its score breakdown, and append workflow notes back to the
 tracker card — so an AI assistant can help you tailor applications while the
 tracker stays the source of truth.
 
+**Demo mode** — `JOBSEARCHER_DEMO=1` runs the whole app on synthetic data,
+so it can be shown publicly without anyone's real job search in it. A
+deterministic generator builds a fresh database for the current day (a few
+hundred postings, a tracker in every lane, labeled recruiter mail, contacts),
+and everything on screen is produced by the real gates, scorer and mail
+classifier, never copied in. Visitors read a shared read-only copy; the first
+time one changes something, they get a private SQLite copy tied to a cookie,
+so nobody sees anyone else's edits. Copies expire when unused, are capped in
+number and size, and anything that would reach the network (sweeps, mail
+sync, posting lookup) is refused with the reason shown.
+
+**Security** — The app runs in a browser that has every other site open too,
+so each request is checked: a host allow-list (DNS rebinding), a
+fetch-metadata cross-site check on every write (CSRF, with no tokens in
+forms), body, query and per-field size limits, and a strict Content Security
+Policy with no inline scripts, handlers or styles anywhere. Stored links are
+limited to http(s). Dependencies are pinned with hashes, and CI runs the
+tests plus `pip-audit`, `bandit` and CodeQL on every pull request.
+
 **Automation** — A launchd agent runs sweep + re-score + email sync twice a
 day; every run is recorded in a `sweep_runs` table and the latest summary
 shows in the feed header. The same code path backs the "Sweep boards" button
@@ -121,9 +140,10 @@ profile.yaml ──► scrapers/ ──► SQLite (jobs.db) ──► scoring/ �
                   resume_build.py ──► DOCX + PDF from YAML
 ```
 
-~5k lines of Python, a test suite covering the scrapers (against fixture
+~10k lines of Python, a test suite covering the scrapers (against fixture
 boards), every gate and scoring rule, the FastAPI routes, email
-classification, the resume renderer, and the MCP server.
+classification, the resume renderer, the MCP server, the request checks and
+the demo sandboxes.
 
 ## Running it
 
@@ -132,11 +152,17 @@ Requires Python 3.12.
 ```bash
 git clone https://github.com/joshuawalulik/jobsearcher && cd jobsearcher
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install --require-hashes -r requirements.txt -r requirements-dev.txt
 
 cp config/profile.example.yaml config/profile.yaml   # then make it yours
 python -m scrapers.sweep        # first sweep (the example profile watches a few well-known boards)
 uvicorn app:app --reload        # http://127.0.0.1:8000
+```
+
+Or look around first, with nothing to configure and nothing real in it:
+
+```bash
+JOBSEARCHER_DEMO=1 uvicorn app:app   # synthetic data, built on startup
 ```
 
 Run the tests:
@@ -144,6 +170,10 @@ Run the tests:
 ```bash
 pytest
 ```
+
+`requirements.txt` (runtime) and `requirements-dev.txt` (adds pytest) are
+compiled from the matching `.in` files with `uv pip compile
+--generate-hashes`; the exact commands are at the top of `requirements.in`.
 
 Optional pieces:
 

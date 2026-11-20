@@ -1,0 +1,3 @@
+# Test-only packages, held to the versions requirements.txt already pins.
+-c requirements.txt
+pytest

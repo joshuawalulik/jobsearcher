@@ -1,0 +1,518 @@
+# Profile for the public demo (JOBSEARCHER_DEMO=1): the fictional candidate
+# Alex J. Candidate. Same shape as config/profile.yaml, every key present.
+# The watchlist holds invented companies only. Demo mode never fetches a
+# board, so these slugs are labels, not live endpoints.
+
+companies:
+  # --- Greenhouse ---
+  - name: Acme Corp
+    ats: greenhouse
+    slug: acme
+  - name: Globex
+    ats: greenhouse
+    slug: globex
+  - name: Initech
+    ats: greenhouse
+    slug: initech
+  - name: Contoso
+    ats: greenhouse
+    slug: contoso
+  - name: Fabrikam
+    ats: greenhouse
+    slug: fabrikam
+  - name: Northwind Labs
+    ats: greenhouse
+    slug: northwindlabs
+  - name: Harborlight Health
+    ats: greenhouse
+    slug: harborlight
+  - name: Oakbridge Financial
+    ats: greenhouse
+    slug: oakbridge
+  - name: Quillstone
+    ats: greenhouse
+    slug: quillstone
+    weight: 1.1
+  - name: Vantage Federal
+    ats: greenhouse
+    slug: vantagefederal
+  # --- Lever ---
+  - name: Tailspin
+    ats: lever
+    slug: tailspin
+  - name: Wingtip
+    ats: lever
+    slug: wingtip
+  - name: Copperline
+    ats: lever
+    slug: copperline
+  - name: Fernhollow
+    ats: lever
+    slug: fernhollow
+  - name: Kestrel Systems
+    ats: lever
+    slug: kestrel
+  # --- Ashby ---
+  - name: Lumenfield
+    ats: ashby
+    slug: lumenfield
+  - name: Brightwater
+    ats: ashby
+    slug: brightwater
+  - name: Marlowe Robotics
+    ats: ashby
+    slug: marlowe
+  - name: Pallet & Pine
+    ats: ashby
+    slug: palletandpine
+  - name: Stackyard
+    ats: ashby
+    slug: stackyard
+
+gates:                # Stage 1 — drop, don't score
+  excluded_title_keywords:   # title substrings that disqualify outright
+    - recruiter
+    - staffing
+    - staff
+    - principal
+    - lead
+    - manager
+    - director
+    - intern
+    - contract
+  work_type:
+    mine: hybrid            # remote | hybrid | onsite
+    reject_conflicts: true  # drop postings that conflict (e.g. onsite-only)
+  allowed_locations:        # empty = any; else substring allowlist
+    - New York
+    - NYC
+    - Distributed           # Elastic-style remote tag
+    # US-remote only — bare "Remote" let through Remote-India/Canada/etc.
+    # Entries below cover the real variants observed in the wild;
+    # multi-country strings that include a US option still pass.
+    - Remote - US           # also 'Remote - USA', 'Remote - US: ...'
+    - Remote - U.S.         # 'Remote - U.S.A.'
+    - Remote - United States
+    - Remote US             # also 'Remote USA'
+    - Remote U.S.
+    - Remote, US            # also 'Remote, USA', 'Remote, US, Texas'
+    - Remote, United States
+    - Remote-US             # also 'Remote-USA'
+    - US-Remote
+    - US - Remote
+    - US Remote
+    - USA Remote
+    - U.S. Remote
+    - USA, Remote           # 'Texas, USA, Remote' state-list style
+    - United States - Remote
+    - United States (Remote)
+    - Remote (US)
+    - Remote (U.S.)
+    - Remote (United States # '(United States | Canada)' etc.
+    - Remote in the US
+    - Remote within         # 'Remote within (Canada or) United States'
+    - Remote-Friendly, United States
+  clearance_keywords:       # security-clearance demands you can't meet
+    - TS/SCI
+    - "top secret"
+    - polygraph
+  # Drop postings first posted more than this many days ago. 0 disables —
+  # the delisted gate still drops dead links via last_seen.
+  max_posting_age_days: 0
+  # Drop jobs the sweep hasn't seen on their board for this many days —
+  # the company delisted them, so the link is dead. 0 disables.
+  delisted_after_days: 2
+  # Drop postings whose description demands more years of experience
+  # than this ("8+ years ... experience"). 0 disables the gate.
+  max_required_experience_years: 6
+
+scoring:              # Stage 2 — weighted 0–100 for gate survivors
+  target_titles:
+    - "Software Engineer"
+    - "Full Stack Engineer"
+    - "Backend Engineer"
+    - "Frontend Engineer"
+  title_match_weight: 30
+  exact_title_bonus: 15
+  # NOTE: short keywords (ai, api, rest, java, css) require word-boundary
+  # matching in score.py — naive substring would hit "maintain", "javascript",
+  # "restaurant", etc.
+  required_keywords:
+    - python
+    - react
+    - api
+  required_keyword_weight: 5
+  preferred_keywords:
+    - next.js
+    - typescript
+    - graphql
+    - microservices
+    - kafka
+    - ci/cd
+    - kubernetes
+    - aws
+  preferred_keyword_weight: 2
+  negative_keywords:
+    - php
+    - wordpress
+    - clearance
+  negative_keyword_weight: -10
+  must_haves: []              # scored jobs missing any of these get the penalty
+  missing_must_have_penalty: -20
+  seniority:
+    target: mid
+    years_to_level:   # description years decide the level; title markers only when no years stated
+      junior_max: 1   # required years <= this -> junior
+      senior_min: 6   # required years >= this -> senior (between -> mid)
+    multipliers:
+      intern: 0.2
+      junior: 0.75
+      mid: 1.0
+      senior: 0.5
+      staff: 0.4
+      principal: 0.3
+  experience:           # penalize demands beyond your years (gate caps the extreme)
+    mine_years: 3
+    over_penalty_per_year: -6   # per required year beyond mine_years
+  sparse_description:   # confidence haircut for title-only stubs
+    min_chars: 400
+    multiplier: 0.85
+
+analytics:            # read-only reporting knobs
+  score_band_edges: [40, 50]    # reply-rate bands: <40, 40–50, 50+
+  fast_apply_hours: 48          # "applied fast" threshold vs first_seen
+
+schedule:             # the daily plan on /schedule; adherence is measured against it
+  workdays: [mon, tue, wed, thu, fri]
+  # Blocks in day order. kind says how a block gets marked done:
+  #   triage        — a job dismissed or tracked, or a reply suggestion handled
+  # all_day: true marks a block that runs through the day (Triage): it lists
+  # its evidence but is never done, partial or missed, and stays out of adherence.
+  #   outreach      — outbound interactions logged that day (new + follow-ups)
+  #   applications  — tracked jobs moved to ready, applied or skipped that day
+  #   manual        — you mark it done on /schedule, or Claude logs it through
+  #                   the connector's log_block tool
+  # Any block can also be marked done by hand. target is the count that makes
+  # an auto block done for the day; fewer is partial.
+  blocks:
+    - key: triage
+      label: Triage
+      all_day: true         # runs through the day: shows what happened, never done or missed
+      kind: triage
+      detail: Due today, new replies and the sweeps as they land; pick the day's 2 jobs and 3 contacts first thing.
+    - key: outreach
+      label: Outreach and referrals
+      start: "09:30"
+      end: "10:30"
+      kind: outreach
+      target: 3
+      detail: Follow-ups first, then 3 new messages. Check list contacts on LinkedIn before drafting.
+    - key: applications
+      label: Applications
+      start: "10:30"
+      end: "12:30"
+      kind: applications
+      target: 2
+      detail: Run /apply on the top 2 To decide jobs. Check for a contact at each company before submitting.
+    - key: coding
+      label: Coding prep
+      start: "13:30"
+      end: "15:00"
+      kind: manual
+      detail: Timed problems, one pattern per day.
+    - key: prep
+      label: Hello Interview
+      start: "15:15"
+      end: "16:30"
+      kind: manual
+      detail: One system design topic at a time.
+      themed: true          # detail follows themes: below
+  themes:                 # the themed block's focus by weekday
+    mon: Learn a system design concept.
+    tue: Do a full design problem.
+    wed: Prepare behavioral stories from your resume.
+    thu: Do a second design problem, out loud and timed.
+  # Per-weekday changes to a block, by key. drop: true removes it that day.
+  overrides:
+    fri:
+      applications:
+        target: 1
+      coding:
+        label: Mock interview
+        detail: A mock interview, even a simple one with a friend.
+      prep:
+        label: Weekly review
+        end: "15:45"
+        detail: Go over the week's numbers and adjust next week's plan.
+        themed: false
+  weekly_targets:         # shown as progress, never enforced
+    applications: 9       # moved to applied or ready (skips count as decided, not here)
+    outreach_new: 15      # first messages to new contacts
+    conversations: 2      # people who wrote back
+    coding: 4             # coding blocks done
+    prep: 4               # Hello Interview blocks done
+
+workflow:              # local application workflow (/apply + apply_run)
+  # Folder that holds per-company application folders under Applications/.
+  home: /srv/demo/JobSearch
+
+outreach:             # recruiter and referral contacts (data/jobs.db contacts table)
+  follow_up:
+    # Weekdays after the first message, both counted from date_contacted.
+    first_business_days: 5
+    second_business_days: 12
+  weekly_targets:       # shown as progress, never enforced
+    agency_first_touches: 5
+    company_recruiter_emails_min: 5
+    company_recruiter_emails_max: 8
+    referral_touches: 1
+  default_ask: Who handles experienced engineering hiring here?
+  company_suffixes: [Inc, LLC, Group, Financial Group]
+  # First item in each list is the canonical name.
+  company_aliases:
+    - [Acme Corp, Acme]
+  # Standing referrals: contacts with standing_referral set get their company
+  # watched for these roles. Locations and excluded titles follow gates:, and
+  # level uses scoring.seniority.years_to_level, so it agrees with the feed.
+  referral_watch:
+    levels: [mid]       # add senior here to include stretch roles
+    title_keywords:
+      - software
+      - full stack
+      - full-stack
+      - fullstack
+      - frontend
+      - front-end
+      - front end
+      - backend
+      - back-end
+      - back end
+      - developer
+  # Warn before cold outreach to a company an active process already covers.
+  dont_double_up:
+    - company: Globex
+      covered_by: Pat Doe, Example Staffing
+  # Stay on file for reference, always Skip, never drafted or suggested.
+  do_not_contact:
+    - company: Initech
+      email_domains: [initech.example]
+      reason: replace with your own reason
+  templates:
+    company_recruiter:
+      subject: Software engineer exploring new roles
+      body: |
+        Hi {first},
+
+        I came across your name while looking into {company}'s engineering teams. If engineering hiring sits with someone else, I'd really appreciate a pointer to the right person.
+
+        Thanks,
+        Alex J. Candidate
+    agency:
+      subject: Full-stack engineer exploring new roles
+      body: |
+        Hi {first},
+
+        If you're working any software engineering searches, I'd love to connect.
+
+        Thanks,
+        Alex
+    alumni:
+      subject: Fellow alum
+      body: |
+        Hi {first},
+
+        I saw you're at {company} and would love to hear what it's been like there.
+
+        Best,
+        Alex
+    linkedin_note:
+      subject: ""
+      body: Hi {first}, are you working any software engineering searches? Would love to connect.
+    follow_up:
+      subject: ""
+      body: Hi {first}, just bumping this in case it got buried. {new_detail} Thanks again!
+
+scraper:
+  delay_seconds: 1      # polite gap between companies on a sweep
+  timeout_seconds: 10
+  user_agent: "personal-job-tool (alex@example.com)"
+
+contact_sync:         # contacts' mail -> interaction log, after each autosweep
+  enabled: true       # needs config/secrets.yaml, like email:
+  folder: '"[Gmail]/All Mail"'
+  # Overlaps on purpose: Message-IDs stop repeats, and a sleeping machine
+  # shouldn't lose a week of mail.
+  lookback_days: 7
+  # InMail alerts carry the full text. Unknown senders become leads.
+  alert_senders:
+    - inmail-hit-reply@linkedin.com
+    - hit-reply@linkedin.com
+  # Only say someone wrote, so these count for known contacts only.
+  digest_senders:
+    - messaging-digest-noreply@linkedin.com
+  lead_priority: C
+  # Paid job-search services and the like never become leads.
+  ignore_names: []
+  ignore_phrases:
+    - job application service
+    - "money back"
+  # A new lead gets a label only when exactly one of these matches.
+  locations:
+    - label: NY
+      words: [New York, NYC, Brooklyn, Manhattan]
+    - label: Remote
+      words: [remote]
+
+email:                # inbox → tracker suggestions (creds in git-ignored config/secrets.yaml)
+  enabled: true       # needs config/secrets.yaml (the UI explains when it's missing)
+  imap_host: imap.gmail.com
+  # Deadline on every IMAP connect and read, so a stalled Gmail socket
+  # can't hold a sweep open (launchd skips a run while the last is alive).
+  imap_timeout_seconds: 60
+  folder: INBOX
+  lookback_days: 14
+  # Only these lanes are matched against the inbox (considering/ready =
+  # not applied yet; rejected/skipped are already terminal).
+  sync_lanes: [applied, interviewing, offer]
+  # Mail older than an application by more than this can't be about it
+  # (the grace covers jobs tracked a few days after applying).
+  application_grace_days: 3
+  # Filtered before anything else; matched against the From address.
+  # Filtered mail stays listed on the tracker with its reason.
+  ignore_senders:
+    - weeklystack.example
+    - newsletters-noreply@linkedin.com
+  # Account and security mail. Only filters when no lane bucket decided,
+  # so an assessment invite that mentions a passcode still gets through.
+  ignore_phrases:
+    - verification code
+    - one[- ]time pass(code|word)
+    - security code
+    - (sign[- ]in|login|access) code
+    - confirm your (identity|email)
+    - verify your (identity|email|account|login)
+    - code required
+    - reset your password
+    - password reset
+    - activate your account
+    - your account has been created
+    - new sign[- ]in
+    - security alert
+  # A sender counts as a person unless its address part matches one of
+  # these (regex) or its domain is listed. Person mail always surfaces,
+  # with no phrase needed, so a role mailbox missing here shows up as a
+  # false "Person" card: add it.
+  automated_senders:
+    - no-?reply
+    - do-?not-?reply
+    - autoreply
+    - careers?
+    - ^jobs?$
+    - recruit(ing|ment)
+    - talent
+    - ^hr$
+    - ^(hello|hi|info|team|news|newsletter|updates?|support|help|contact)$
+    - notifications?
+    - ^(billing|receipts?|orders?|invoices?|payments?|accounts?|security|alerts?)$
+    - mailer
+    - sender
+    - "[0-9a-f]{16,}"     # opaque hash addresses, sent by a system
+  automated_domains:
+    - myworkday.com
+    - icims.com
+    - clinchtalent.com
+  # Every bucket is scored after quoted reply/forward history is
+  # stripped: a phrase counts strong_weight (strong) or 1 (weak), once in
+  # the body and subject_weight times in the subject. A bucket needs
+  # min_score to decide, so one weak phrase alone never does, and it
+  # needs to beat the others; ties keep this top-to-bottom order, rejected
+  # first, so a pure "after your interview, unfortunately…" still reads
+  # as a rejection. Entries are case-insensitive regexes matched on whole
+  # words; plain phrases work as they are.
+  subject_weight: 2
+  strong_weight: 2
+  min_score: 2
+  classify:
+    rejected:
+      strong:
+        - not (to |be )?mov(e|ing) forward
+        - not (to |be )?(advanc|progress|continu)(e|ing)
+        - mov(e|ing) forward with other
+        - pursu(e|ing) (other )?candidates
+        - will not be proceeding
+        - not to proceed
+        - unable to extend an offer
+        - decided to pursue
+        - position has been filled
+        - no longer (available|under consideration)
+        - hired someone
+        - different direction
+        - regret to inform
+        - not been selected
+        - other qualified candidates
+      weak:
+        - unfortunately
+        - best of luck in your (job )?search
+        - keep your (information|resume) on file
+        - at this time
+    offer:
+      strong:
+        - pleased to extend
+        - pleased to offer
+        - offer letter
+        - formal offer
+        - extend an offer
+        - offer of employment
+    # Recruiter-screen phrases folded in since the screening lane was
+    # retired — a phone-screen email now suggests Interviewing.
+    interviewing:
+      strong:
+        - technical interview
+        - interview with the team
+        - coding challenge
+        - take-home
+        - schedule (your|an) interview
+        - invite you to interview
+        - next round
+        - technical assessment
+        - video interview
+        - phone screen
+        - recruiter screen
+        - initial call
+        - schedule a call
+        - your availability
+        - chat about your application
+        - introductory call
+        - (would|we'd|i'd) (like|love) to (speak|talk|chat|connect|schedule|interview)
+      weak:
+        - onsite
+        - hiring manager
+        - get to know you
+        - schedule
+        - availability
+        - calendly
+  # An automated "we got it" with no lane signal and nothing else in it
+  # is filed straight into reply history: no card, no lane move. Matched
+  # in the body only, and forward-looking on purpose: rejections thank
+  # you for applying too, and say "after reviewing your application", so
+  # those words must not be enough to file a mail unseen. Anything these
+  # miss just stays a normal Save reply card.
+  receipt_phrases:
+    - (received|got) your application
+    - application (has been|was) received
+    - receipt of your application
+    - application landed
+    - (are|is|be|process of) (carefully )?reviewing
+    - will (review|be reviewing)
+    - review (it|your application|what you|each candidate|each application)
+    - (reach out|contact you|be in touch)
+    - (will|expect to) hear from
+  # Mail matching nothing above still surfaces as a plain "reply
+  # received" suggestion when it looks application-related — this gate
+  # keeps company newsletters and marketing out of the tracker.
+  reply_markers:
+    - your application
+    - thank you for applying
+    - application to
+    - your candidacy
+    - application status

@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# The workflow only reads the code. Nothing here can push or change the repo.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -13,10 +17,29 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+      # Every package is pinned to a version and a hash, runtime and test alike.
+      - run: pip install --require-hashes -r requirements.txt -r requirements-dev.txt
       - run: pytest -q
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Known vulnerabilities in the locked dependencies
+        run: >
+          pipx run --spec pip-audit==2.10.1 pip-audit --require-hashes --disable-pip
+          -r requirements.txt -r requirements-dev.txt
+      - name: Static security checks
+        run: pipx run --spec bandit==1.9.4 bandit -q -c bandit.yaml -r .

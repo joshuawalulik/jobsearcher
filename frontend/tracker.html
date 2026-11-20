@@ -6,7 +6,7 @@
   <h1>Tracker</h1>
   <span class="spacer"></span>
   <span id="email-ind" class="htmx-indicator hint">Checking inbox&hellip;</span>
-  <button type="button" onclick="var d = document.getElementById('add-job'); d.open = !d.open">Add a job manually</button>
+  <button type="button" data-action="toggle" data-target="add-job">Add a job manually</button>
   <button class="sync-email" hx-post="/email/sync" hx-target="#email-sync-status"
           hx-swap="outerHTML" hx-disabled-elt="this"
           hx-indicator="#email-ind">Sync email</button>
@@ -22,7 +22,7 @@
   <p class="hint">For jobs found outside the tool (referral, LinkedIn, a company
   not on the watchlist). Goes straight to the considering lane — scored against
   your profile (paste the JD for a meaningful number), but never gated or swept.</p>
-  <form class="fetch-row" hx-get="/jobs/lookup" hx-target="#add-job-form"
+  <form class="fetch-row" hx-post="/jobs/lookup" hx-target="#add-job-form"
         hx-swap="outerHTML" hx-disabled-elt="find button">
     <input type="url" name="url"
            placeholder="Paste a Greenhouse / Lever / Ashby job URL to auto-fill&hellip;">
@@ -32,55 +32,4 @@
 </details>
 {% include "_board.html" %}
 <div id="modal"></div>
-<script>
-  // Card clicks open the slide-over, except clicks on the card's own controls.
-  function opensAppModal(evt) {
-    return !evt.target.closest("a, button");
-  }
-  function closeAppPanel() {
-    var overlay = document.querySelector(".modal-overlay");
-    if (overlay) overlay.remove();
-    markOpenCard();
-  }
-  // Outline the card the slide-over shows, including after the board redraws.
-  function markOpenCard() {
-    var open = document.querySelector(".modal[data-app]");
-    document.querySelectorAll(".app-card.sel").forEach(function (card) {
-      card.classList.remove("sel");
-    });
-    var card = open && document.getElementById("app-" + open.dataset.app);
-    if (card) card.classList.add("sel");
-  }
-  document.addEventListener("htmx:afterSettle", markOpenCard);
-  document.addEventListener("panelClosed", markOpenCard);
-  document.addEventListener("keydown", function (evt) {
-    if (evt.key === "Escape") closeAppPanel();
-  });
-  // Replacing all of #board (lane select, suggestion accept/dismiss,
-  // untrack) destroys the browser's scroll anchor and the page jumps to
-  // the bottom — pin the scroll position across those swaps.
-  var boardScroll = null;
-  var openFolds = [];
-  function rememberBoardScroll(evt) {
-    if (evt.detail.target && evt.detail.target.id === "board") {
-      boardScroll = window.scrollY;
-      // Show N more stays open across the redraw too.
-      openFolds = Array.from(document.querySelectorAll(".lane-more[open]")).map(function (fold) {
-        return fold.dataset.lane;
-      });
-    }
-  }
-  document.addEventListener("htmx:beforeSwap", rememberBoardScroll);
-  document.addEventListener("htmx:oobBeforeSwap", rememberBoardScroll);
-  document.addEventListener("htmx:afterSettle", function () {
-    if (boardScroll !== null) {
-      openFolds.forEach(function (lane) {
-        var fold = document.querySelector('.lane-more[data-lane="' + lane + '"]');
-        if (fold) fold.open = true;
-      });
-      window.scrollTo(0, boardScroll);
-      boardScroll = null;
-    }
-  });
-</script>
 {% endblock %}

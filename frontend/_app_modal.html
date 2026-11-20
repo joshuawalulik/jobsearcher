@@ -3,9 +3,9 @@
 <div class="modal-overlay">
   <div class="modal" role="dialog" aria-label="{{ a.title }}" data-app="{{ a.id }}">
     <button class="modal-close icon" type="button" aria-label="Close"
-            onclick="closeAppPanel()"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
+            data-action="close-panel"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
     <div class="p-head">
-      <h2 style="margin-top:0;padding-right:24px">{{ a.title }}</h2>
+      <h2 class="p-title">{{ a.title }}</h2>
       <p class="meta">
         {{ a.company }}
         {% if a.location %} · {{ a.location }}{% endif %}
@@ -14,7 +14,7 @@
         · tracked since {{ a.created_at | short_date }}
       </p>
       <div class="p-actions">
-        <select name="lane" aria-label="Lane" class="lane-select" style="flex:1"
+        <select name="lane" aria-label="Lane" class="lane-select grow"
                 hx-post="/applications/{{ a.id }}/lane" hx-target="#board" hx-swap="outerHTML">
           {% for lane in all_lanes %}
           <option value="{{ lane }}" {% if lane == a.lane %}selected{% endif %}>{{ lane | capitalize }}</option>
@@ -24,9 +24,9 @@
         <button class="untrack" hx-post="/applications/{{ a.id }}/untrack"
                 hx-target="#board" hx-swap="outerHTML"
                 hx-confirm="Untrack this job? It goes back to being a plain match in the feed."
-                hx-on::after-request="closeAppPanel()">Untrack</button>
+                data-after="close-panel">Untrack</button>
         {% endif %}
-        {% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">Posting <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}
+        {% if a.url | http_url %}<a href="{{ a.url | http_url }}" target="_blank" rel="noopener">Posting <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}
       </div>
     </div>
     {% if a.suggestions or a.email_replies %}

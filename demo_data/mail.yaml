@@ -1,0 +1,550 @@
+# Labeled synthetic mail for the demo (demo_seed.py) and, later, the evals.
+# Every message is invented: written from the kinds of mail an applicant
+# gets, never copied from a real inbox. Addresses use the reserved .example
+# domain.
+#
+#   app      the application (demo_data/tracker.yaml key) the mail is about;
+#            {company} and {title} in the text come from it.
+#   when     {after: <lane>, minutes: N}   N minutes after that lane step
+#            {before: <lane>, minutes: N}  N minutes before that lane step
+#            {workdays: N, at: "HH:MM"}    N workdays before the anchor day
+#   expect   the human label: what the mail is (rejected, interviewing,
+#            offer, receipt, person, reply, noise, or drop for mail that
+#            should leave no trace) and, where it matters, which application
+#            it belongs to.
+#   seed     what the user did with the suggestion in the demo's history:
+#            accepted, pending or dismissed. Receipts file themselves.
+#   known_miss  true where the rule-based classifier is expected to disagree
+#            with the label. Kept on purpose: the evals measure these.
+
+messages:
+  # --- receipts: automated, forward-looking, nothing else in them ---
+  - id: m01
+    app: offer
+    when: {after: applied, minutes: 3}
+    from_name: Lumenfield Careers
+    from_addr: no-reply@lumenfield.example
+    subject: Thanks for applying to Lumenfield
+    body: |
+      Hi {first},
+
+      Thanks for applying for the {title} role at {company}. We've received your application, and our team will review it over the next week.
+
+      If your background looks like a match, a recruiter will reach out to set up a first conversation.
+
+      The {company} Talent Team
+    expect: {kind: receipt, app: offer}
+  - id: m02
+    app: int_acme
+    when: {after: applied, minutes: 2}
+    from_name: Acme Corp Recruiting
+    from_addr: recruiting@acme.example
+    subject: "Your application to {company}"
+    body: |
+      Hello {first},
+
+      Your application for {title} was received. We are reviewing applications in the order they arrive and will be in touch if there is a fit.
+
+      Thank you for your interest in {company}.
+    expect: {kind: receipt, app: int_acme}
+  - id: m03
+    app: int_contoso
+    when: {after: applied, minutes: 5}
+    from_name: Contoso Jobs
+    from_addr: jobs@contoso.example
+    subject: "We got your application, {first}"
+    body: |
+      Hi {first},
+
+      This is a quick note to confirm that we got your application for {title}. Someone on our recruiting team will review it soon.
+
+      You don't need to do anything else for now.
+
+      Contoso Recruiting
+    expect: {kind: receipt, app: int_contoso}
+  - id: m04
+    app: int_harbor
+    when: {after: applied, minutes: 1}
+    from_name: Harborlight Health
+    from_addr: notifications@talentdesk.example
+    subject: "Application received: {title}"
+    body: |
+      Dear {first},
+
+      Thank you for applying to {company}. Your application has been received and is with our recruiting team.
+
+      We will review it carefully and contact you about next steps.
+    expect: {kind: receipt, app: int_harbor}
+  - id: m05
+    app: rej_oakbridge
+    when: {after: applied, minutes: 4}
+    from_name: Oakbridge Financial Careers
+    from_addr: careers@oakbridge.example
+    subject: Thank you for applying to Oakbridge Financial
+    body: |
+      Hi {first},
+
+      We received your application for the {title} position. Our recruiters are reviewing every application and will reach out within two weeks.
+
+      Best,
+      Oakbridge Financial Talent
+    expect: {kind: receipt, app: rej_oakbridge}
+  - id: m06
+    app: app_quillstone
+    when: {after: applied, minutes: 2}
+    from_name: Quillstone
+    from_addr: no-reply@quillstone.example
+    subject: "Thanks for your application to {company}"
+    body: |
+      Hi {first},
+
+      Your application landed safely. A person on our team will review what you sent, and you can expect to hear from us within ten days.
+
+      Quillstone
+    expect: {kind: receipt, app: app_quillstone}
+  - id: m07
+    app: app_northwind
+    when: {after: applied, minutes: 190}
+    from_name: Dana Whitfield
+    from_addr: dana.whitfield@northwindlabs.example
+    subject: "Re: Full Stack Engineer application"
+    body: |
+      Hi {first},
+
+      Thanks for applying. I run engineering here and I read every application myself, so this isn't an automatic reply. Your note about forecasting tools caught my eye.
+
+      I'm out until Tuesday and will write again once I'm back.
+
+      Dana
+    expect: {kind: person, app: app_northwind}
+    seed: pending
+  - id: m08
+    app: app_pallet
+    when: {after: applied, minutes: 6}
+    from_name: "Pallet & Pine Careers"
+    from_addr: careers@palletandpine.example
+    subject: "Your application to {company}"
+    body: |
+      Hello {first},
+
+      Thanks for applying to {company}. We received your application for {title}.
+
+      Our hiring manager reads each application personally, so replies can take a little longer than you might be used to.
+
+      The Pallet & Pine team
+    expect: {kind: receipt, app: app_pallet}
+    known_miss: true
+    seed: accepted
+  - id: m09
+    app: app_lumenfield
+    when: {after: applied, minutes: 3}
+    from_name: Lumenfield Careers
+    from_addr: no-reply@lumenfield.example
+    subject: Thanks for applying to Lumenfield
+    body: |
+      Hi {first},
+
+      Thanks for applying for the {title} role at {company}. We've received your application, and our team will review it over the next week.
+
+      The {company} Talent Team
+    expect: {kind: receipt, app: app_lumenfield}
+  - id: m10
+    app: app_harbor
+    when: {after: applied, minutes: 1}
+    from_name: Harborlight Health
+    from_addr: notifications@talentdesk.example
+    subject: "Application received: {title}"
+    body: |
+      Dear {first},
+
+      Thank you for applying to {company}. Your application has been received and is with our recruiting team.
+
+      We will review it carefully and contact you about next steps.
+    expect: {kind: receipt, app: app_harbor}
+  - id: m11
+    app: app_globex
+    when: {after: applied, minutes: 8}
+    from_name: Globex Talent
+    from_addr: talent@globex.example
+    subject: "{company} has your application"
+    body: |
+      Hi {first},
+
+      We have received your application for {title}. Our team will be reviewing applications this week.
+
+      Thanks for your interest in Globex.
+    expect: {kind: receipt, app: app_globex}
+  - id: m12
+    app: app_acme
+    when: {after: applied, minutes: 2}
+    from_name: Acme Corp Recruiting
+    from_addr: recruiting@acme.example
+    subject: "Your application to {company}"
+    body: |
+      Hello {first},
+
+      Your application for {title} was received. We are reviewing applications in the order they arrive and will be in touch if there is a fit.
+
+      Thank you for your interest in {company}.
+    expect: {kind: receipt, app: app_acme}
+  - id: m13
+    app: app_wingtip
+    when: {after: applied, minutes: 4}
+    from_name: Wingtip Hiring
+    from_addr: no-reply@wingtip.example
+    subject: We received your application
+    body: |
+      Hi {first},
+
+      Thanks for applying to {company} for the {title} opening. Your application was received, and we will review it this week.
+
+      Wingtip
+    expect: {kind: receipt, app: app_wingtip}
+
+  # --- interview invitations ---
+  - id: m14
+    app: offer
+    when: {before: interviewing, minutes: 95}
+    from_name: Jordan Avery
+    from_addr: jordan.avery@lumenfield.example
+    subject: "{company} / {title}: next steps"
+    body: |
+      Hi {first},
+
+      I'm a recruiter at {company}. The team liked your application for {title}, and I'd love to schedule a call to tell you more about the role.
+
+      Could you share your availability for a 30 minute phone screen this week or next?
+
+      Jordan
+    expect: {kind: interviewing, app: offer}
+    seed: accepted
+  - id: m15
+    app: int_acme
+    when: {before: interviewing, minutes: 140}
+    from_name: Acme Corp Recruiting
+    from_addr: recruiting@acme.example
+    subject: "Interview for {title}"
+    body: |
+      Hello {first},
+
+      Good news: we would like to invite you to interview for {title}. The first step is a 60 minute technical interview with two engineers from the Payments team.
+
+      Please reply with your availability over the next week.
+
+      Acme Corp Recruiting
+    expect: {kind: interviewing, app: int_acme}
+    seed: accepted
+  - id: m16
+    app: int_contoso
+    when: {before: interviewing, minutes: 60}
+    from_name: Sam Ito
+    from_addr: sam.ito@contoso.example
+    subject: "Contoso interview: {title}"
+    body: |
+      Hi {first},
+
+      Thanks for your patience. We'd like to move ahead with a video interview with the hiring manager for {title}.
+
+      What does your calendar look like on Thursday or Friday?
+
+      Sam
+    expect: {kind: interviewing, app: int_contoso}
+    seed: accepted
+  - id: m17
+    app: int_harbor
+    when: {before: interviewing, minutes: 200}
+    from_name: Harborlight Health Assessments
+    from_addr: no-reply@codeassess.example
+    subject: "Your technical assessment for {company}"
+    body: |
+      Hi {first},
+
+      {company} has invited you to complete a take-home technical assessment for {title}. It takes about two hours and is due in seven days.
+
+      Use access code 7H4-KQ2 to sign in and begin.
+
+      Good luck!
+    expect: {kind: interviewing, app: int_harbor}
+    seed: accepted
+  - id: m18
+    app: rej_oakbridge
+    when: {before: interviewing, minutes: 75}
+    from_name: Riley Brandt
+    from_addr: riley.brandt@oakbridge.example
+    subject: "{title} at Oakbridge: let's talk"
+    body: |
+      Hi {first},
+
+      I lead recruiting for the Lending team. Your background looks like a strong fit, and I'd like to set up an introductory call, followed by a technical interview with the team if that goes well.
+
+      Are you free any afternoon this week?
+
+      Riley
+    expect: {kind: interviewing, app: rej_oakbridge}
+    seed: accepted
+  - id: m19
+    app: rej_fabrikam
+    when: {before: interviewing, minutes: 120}
+    from_name: Fabrikam Talent
+    from_addr: talent@fabrikam.example
+    subject: "Next steps for {title}"
+    body: |
+      Hello {first},
+
+      Thank you for applying to Fabrikam. We'd like to schedule an initial call with a member of our engineering team.
+
+      Please pick a time that suits you using the link in this message.
+    expect: {kind: interviewing, app: rej_fabrikam}
+    seed: accepted
+  - id: m20
+    app: app_lumenfield
+    when: {workdays: 1, at: "15:20"}
+    from_name: Jordan Avery
+    from_addr: jordan.avery@lumenfield.example
+    subject: "{title}: recruiter screen"
+    body: |
+      Hi {first},
+
+      Good to see your name again. The data team would like to start with a short recruiter screen for {title}.
+
+      Could you send me a few times that work this week?
+
+      Jordan
+    expect: {kind: interviewing, app: app_lumenfield}
+    seed: pending
+
+  # --- offer ---
+  - id: m21
+    app: offer
+    when: {before: offer, minutes: 80}
+    from_name: Jordan Avery
+    from_addr: jordan.avery@lumenfield.example
+    subject: "Your offer from {company}"
+    body: |
+      Hi {first},
+
+      On behalf of everyone you met, I'm pleased to extend an offer for the {title} role at {company}. The offer letter is attached, with the details we discussed on our call.
+
+      Take the time you need to read it, and call me with any questions.
+
+      Jordan
+    expect: {kind: offer, app: offer}
+    seed: accepted
+
+  # --- rejections ---
+  - id: m22
+    app: rej_oakbridge
+    when: {before: rejected, minutes: 130}
+    from_name: Riley Brandt
+    from_addr: riley.brandt@oakbridge.example
+    subject: "Update on {title}"
+    body: |
+      Hi {first},
+
+      Thank you for the time you put into your interviews with us. The team enjoyed meeting you. Unfortunately, we have decided to pursue a candidate with more lending experience.
+
+      I hope our paths cross again.
+
+      Riley
+    expect: {kind: rejected, app: rej_oakbridge}
+    seed: accepted
+  - id: m23
+    app: rej_globex
+    when: {before: rejected, minutes: 90}
+    from_name: Globex Talent
+    from_addr: talent@globex.example
+    subject: "Your application to {company}"
+    body: |
+      Dear {first},
+
+      Thank you for applying to {company}. After reviewing your application for {title}, we will not be moving forward with your candidacy.
+
+      We appreciate your interest and wish you well.
+    expect: {kind: rejected, app: rej_globex}
+    seed: accepted
+  - id: m24
+    app: rej_tailspin
+    when: {before: rejected, minutes: 45}
+    from_name: Tailspin Careers
+    from_addr: careers@tailspin.example
+    subject: "{title} at Tailspin"
+    body: |
+      Hi {first},
+
+      Thanks for your interest in Tailspin. The {title} position has been filled, so we are closing out the remaining applications.
+
+      We'd be glad to hear from you again when another role fits.
+    expect: {kind: rejected, app: rej_tailspin}
+    seed: accepted
+  - id: m25
+    app: rej_kestrel
+    when: {before: rejected, minutes: 240}
+    from_name: Kestrel Systems
+    from_addr: no-reply@kestrel.example
+    subject: "Thank you for your interest in {company}"
+    body: |
+      Hello {first},
+
+      Thank you for your interest in the {title} role. Unfortunately, we are not able to offer you a place in our process at this time.
+
+      Best of luck in your search.
+    expect: {kind: rejected, app: rej_kestrel}
+    seed: accepted
+  - id: m26
+    app: rej_wingtip
+    when: {before: rejected, minutes: 30}
+    from_name: Wingtip Hiring
+    from_addr: no-reply@wingtip.example
+    subject: An update on your Wingtip application
+    body: |
+      Hi {first},
+
+      We appreciate you applying for {title}. After careful thought, we've decided to go in a different direction for this role.
+
+      Thank you again for your time.
+    expect: {kind: rejected, app: rej_wingtip}
+    seed: accepted
+  - id: m27
+    app: rej_fabrikam
+    when: {before: rejected, minutes: 65}
+    from_name: Fabrikam Talent
+    from_addr: talent@fabrikam.example
+    subject: "{title}: update"
+    body: |
+      Hello {first},
+
+      Thank you for speaking with us about {title}. We will not be proceeding to the next stage with your application.
+
+      We wish you the best.
+    expect: {kind: rejected, app: rej_fabrikam}
+    seed: accepted
+  - id: m28
+    app: rej_stackyard
+    when: {before: rejected, minutes: 110}
+    from_name: Stackyard People Team
+    from_addr: people@stackyard.example
+    subject: "Your application for {title}"
+    body: |
+      Hi {first},
+
+      We regret to inform you that we are not able to move ahead with your application for {title}. We had many strong applicants for a single opening.
+
+      Thank you for considering Stackyard.
+    expect: {kind: rejected, app: rej_stackyard}
+    seed: accepted
+  - id: m29
+    app: app_acme
+    when: {workdays: 1, at: "16:05"}
+    from_name: Acme Corp Recruiting
+    from_addr: recruiting@acme.example
+    subject: "Your application for {title}"
+    body: |
+      Hello {first},
+
+      Thank you for applying for {title}. We have decided to move forward with other candidates for this opening.
+
+      Your application for other roles at Acme Corp is not affected by this decision.
+    expect: {kind: rejected, app: app_acme}
+    seed: pending
+
+  # --- two open applications, no title named ---
+  - id: m30
+    app: app_contoso
+    when: {workdays: 2, at: "11:42"}
+    from_name: Sam Ito
+    from_addr: sam.ito@contoso.example
+    subject: Quick update from Contoso
+    body: |
+      Hi {first},
+
+      A short note to say we're still working through things on our side. I should have news for you early next week.
+
+      Sam
+    expect: {kind: person}
+    seed: pending
+
+  # --- noise: kept on the Ignored mail list with the reason ---
+  - id: m31
+    company: Oakbridge Financial
+    when: {workdays: 31, at: "09:14"}
+    from_name: Oakbridge Financial Careers
+    from_addr: no-reply@oakbridge.example
+    subject: "Oakbridge Financial: your verification code is 482913"
+    body: |
+      Use this verification code to finish signing in to your candidate profile. It expires in ten minutes.
+    expect: {kind: noise}
+  - id: m32
+    company: Acme Corp
+    when: {workdays: 7, at: "07:02"}
+    from_name: Weekly Stack
+    from_addr: digest@weeklystack.example
+    subject: "Acme Corp raises new funding, and four more stories"
+    body: |
+      This week: Acme Corp raises new funding, a look at preview environments, and why your queue is slower than you think.
+    bulk: true
+    expect: {kind: noise}
+  - id: m33
+    company: Globex
+    when: {workdays: 31, at: "13:30"}
+    from_name: Globex Careers
+    from_addr: careers@globex.example
+    subject: "Globex careers: reset your password"
+    body: |
+      We received a request to reset your password for the Globex careers site. If this was you, follow the link below.
+    expect: {kind: noise}
+  - id: m34
+    company: Contoso
+    when: {workdays: 6, at: "10:00"}
+    from_name: Contoso
+    from_addr: news@contoso.example
+    subject: "What's new in Contoso this month"
+    body: |
+      Shared cursors, faster search and a new admin console.
+
+      Beta testers: you can check the status of your application to the early access program from your account page.
+    bulk: true
+    expect: {kind: noise}
+  - id: m35
+    company: Acme Corp
+    when: {workdays: 14, at: "18:45"}
+    from_name: Acme Corp Careers
+    from_addr: no-reply@acme.example
+    subject: "New sign-in to your Acme Corp candidate account"
+    body: |
+      We noticed a new sign-in to your candidate account from a browser we haven't seen before. If this was you, no action is needed.
+    expect: {kind: noise}
+
+  # --- mail that should leave no trace ---
+  - id: m36
+    company: Acme Corp
+    when: {workdays: 5, at: "12:10"}
+    from_name: Acme Corp Events
+    from_addr: events@acme.example
+    subject: "Acme Corp Summit: hear from our CEO"
+    body: |
+      Join us next month to hear from our CEO and product leaders about where retail payments are heading. Seats are limited.
+    bulk: true
+    expect: {kind: drop}
+  - id: m37
+    app: rej_globex
+    when: {workdays: 1, at: "09:40"}
+    from_name: Globex Talent
+    from_addr: talent@globex.example
+    subject: "How was your experience with Globex?"
+    body: |
+      Hi {first},
+
+      You recently applied for {title}. Thank you for applying. We would value two minutes of your feedback on how we handled your application.
+    expect: {kind: drop}
+  - id: m38
+    company: Stackyard
+    when: {workdays: 8, at: "08:05"}
+    from_name: Stackyard
+    from_addr: hello@stackyard.example
+    subject: "Schedule a demo of Stackyard preview environments"
+    body: |
+      See how teams ship faster with a preview environment for every pull request. Pick a time and we'll walk you through it.
+    bulk: true
+    expect: {kind: drop}
+    known_miss: true
+    seed: dismissed

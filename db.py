@@ -277,13 +277,24 @@ _CONTACT_FIELDS = (
 
 
 def get_connection(
-    db_path: Path = DB_PATH, *, check_same_thread: bool = True
+    db_path: Path = DB_PATH, *, check_same_thread: bool = True,
+    read_only: bool = False, must_exist: bool = False,
 ) -> sqlite3.Connection:
     # check_same_thread=False is for FastAPI's per-request connections:
     # the threadpool may run a dependency and its endpoint on different
     # threads, but each connection is still used by one request at a time.
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
+    if read_only or must_exist:
+        # read_only: SQLite itself refuses writes on this connection.
+        # must_exist: writable, but a missing file is an error instead of
+        # a new empty database (a demo sandbox deleted a moment ago).
+        mode = "ro" if read_only else "rw"
+        conn = sqlite3.connect(
+            f"{db_path.resolve().as_uri()}?mode={mode}", uri=True,
+            check_same_thread=check_same_thread,
+        )
+    else:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -581,7 +592,7 @@ def fetch_matches(
                (SELECT a.lane FROM applications a WHERE a.job_id = j.id)
                    AS tracked
         FROM jobs j JOIN companies c ON c.id = j.company_id
-        """ + _MATCH_WHERE
+        """ + _MATCH_WHERE  # nosec B608: constant clauses; values are bound
     params: list = []
     if query:
         sql += _MATCH_SEARCH
@@ -633,7 +644,7 @@ def count_matches(
     """How many jobs fetch_matches would return without a limit."""
     sql = (
         "SELECT COUNT(*) FROM jobs j JOIN companies c ON c.id = j.company_id"
-        + _MATCH_WHERE
+        + _MATCH_WHERE  # nosec B608: a constant clause; values are bound below
     )
     params: list[str] = []
     if query:
@@ -1145,7 +1156,7 @@ def insert_contact(conn: sqlite3.Connection, **fields) -> int:
     columns = ", ".join(fields)
     marks = ", ".join("?" for _ in fields)
     cur = conn.execute(
-        f"INSERT INTO contacts ({columns}) VALUES ({marks})",
+        f"INSERT INTO contacts ({columns}) VALUES ({marks})",  # nosec B608: _CONTACT_FIELDS names
         tuple(fields.values()),
     )
     conn.commit()
@@ -1164,7 +1175,9 @@ def fetch_contacts(
     """Every contact in the tool. include_removed is for the importer, which
     must recognize removed people so it doesn't add them back."""
     where = "" if include_removed else "WHERE removed_at IS NULL"
-    return conn.execute(f"SELECT * FROM contacts {where} ORDER BY id").fetchall()
+    return conn.execute(
+        f"SELECT * FROM contacts {where} ORDER BY id"  # nosec B608: where is one of two constants
+    ).fetchall()
 
 
 def remove_contact(conn: sqlite3.Connection, contact_id: int) -> bool:
@@ -1188,7 +1201,7 @@ def update_contact(conn: sqlite3.Connection, contact_id: int, **fields) -> bool:
         return get_contact(conn, contact_id) is not None
     assignments = ", ".join(f"{name} = ?" for name in fields)
     cur = conn.execute(
-        f"UPDATE contacts SET {assignments}, updated_at = datetime('now') "
+        f"UPDATE contacts SET {assignments}, updated_at = datetime('now') "  # nosec B608: _CONTACT_FIELDS names
         "WHERE id = ?",
         (*fields.values(), contact_id),
     )
@@ -1306,7 +1319,7 @@ def fetch_open_jobs(
               WHERE a.job_id = j.id AND ca.contact_id = ?
           )
         ORDER BY j.first_seen DESC, j.id
-        """,
+        """,  # nosec B608: marks is only "?" placeholders, one per id
         (*company_ids, contact_id),
     ).fetchall()
 

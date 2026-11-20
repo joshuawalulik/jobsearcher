@@ -3,7 +3,7 @@
 <div class="modal-overlay">
   <div class="modal padded" role="dialog" aria-label="{{ c.name or c.company }}">
     <button class="modal-close icon" type="button" aria-label="Close"
-            onclick="this.closest('.modal-overlay').remove()"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
+            data-action="close-panel"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
     <h2>{{ c.name or c.company }}</h2>
     <p class="meta">
       {{ c.company or 'No company' }} · {{ c.track | replace('_', ' ') | capitalize }}
@@ -23,7 +23,7 @@
 
     <dl class="modal-details">
       <dt>Email</dt><dd>{{ c.email or '—' }}</dd>
-      <dt>LinkedIn</dt><dd>{% if c.linkedin_url %}<a href="{{ c.linkedin_url }}" target="_blank" rel="noopener">Open profile <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% else %}—{% endif %}</dd>
+      <dt>LinkedIn</dt><dd>{% if c.linkedin_url | http_url %}<a href="{{ c.linkedin_url | http_url }}" target="_blank" rel="noopener">Open profile <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% else %}—{% endif %}</dd>
       <dt>Location</dt><dd>{{ c.location or '—' }}</dd>
       <dt>NYC</dt><dd>{{ c.nyc_relevance or '—' }}</dd>
       <dt>Ask</dt><dd>{{ c.ask or '—' }}</dd>
@@ -48,7 +48,7 @@
       {% if template.subject %}<p class="hint">Subject: {{ template.subject }}</p>{% endif %}
       <pre class="contact-template">{{ template.body }}</pre>
       <button type="button"
-              onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent); this.textContent = 'Copied'">Copy message</button>
+              data-action="copy-previous">Copy message</button>
     </details>
     {% endif %}
 

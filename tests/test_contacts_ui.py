@@ -55,7 +55,7 @@ def conn(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(conn):
-    return TestClient(app)
+    return TestClient(app, base_url="http://localhost")
 
 
 def contact(conn, **overrides):

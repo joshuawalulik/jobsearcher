@@ -1,0 +1,445 @@
+# Fragment banks for the demo's synthetic postings (demo_seed.py).
+# Everything here is invented. Company names match config/profile.demo.yaml;
+# none is a real employer. Postings are assembled from these pieces by a
+# seeded generator, then gated and scored by the real pipeline.
+
+companies:
+  Acme Corp:
+    openings: 34
+    blurb: Acme Corp builds payments infrastructure for independent retailers. Our platform moves money for more than forty thousand shops, and the engineering team owns everything from the card terminal firmware to the ledger.
+    teams: [Payments, Ledger, Merchant Dashboard, Risk, Developer Platform]
+    locations: [nyc, nyc, nyc_hybrid, remote_us, sf]
+  Globex:
+    openings: 28
+    blurb: Globex makes logistics software for mid-sized freight carriers. Dispatchers plan routes, drivers scan loads, and finance closes the books in one system that we have been building since 2014.
+    teams: [Dispatch, Driver App, Billing, Integrations, Data Platform]
+    locations: [nyc, nyc_hybrid, chicago, remote_us, remote_us]
+  Initech:
+    openings: 22
+    blurb: Initech sells workflow automation to insurance back offices. Claims teams use our tools to cut paperwork that used to take days down to minutes.
+    teams: [Claims, Workflow Engine, Document Intelligence, Admin Console]
+    locations: [austin, austin, nyc, remote_us]
+  Contoso:
+    openings: 14
+    blurb: Contoso is a collaboration suite used by distributed teams at over two thousand companies. We ship weekly, and every engineer talks to customers.
+    teams: [Editor, Realtime Sync, Search, Growth, Identity]
+    locations: [nyc, nyc_hybrid, remote_us, seattle, london]
+  Fabrikam:
+    openings: 20
+    blurb: Fabrikam builds scheduling and billing software for outpatient clinics. Front desks, clinicians and patients all touch the product daily.
+    teams: [Scheduling, Patient Portal, Billing, Interoperability]
+    locations: [nyc, nyc, boston, remote_us]
+  Northwind Labs:
+    openings: 16
+    blurb: Northwind Labs is a forty-person team making demand forecasting tools for grocery chains. We are profitable and growing carefully.
+    teams: [Forecasting, Store Ops, Integrations]
+    locations: [nyc_hybrid, nyc, remote_us]
+  Harborlight Health:
+    openings: 30
+    blurb: Harborlight Health runs a care navigation service for people managing chronic conditions. Our software connects members, nurses and health plans.
+    teams: [Member Experience, Care Team Tools, Claims Data, Platform]
+    locations: [nyc, nyc_hybrid, remote_us, denver]
+  Oakbridge Financial:
+    openings: 30
+    blurb: Oakbridge Financial is a digital bank for small businesses, offering checking, cards and lending through one account.
+    teams: [Lending, Cards, Onboarding, Core Banking, Fraud]
+    locations: [nyc, nyc, nyc_hybrid, charlotte]
+  Quillstone:
+    openings: 18
+    blurb: Quillstone makes a publishing platform for independent newsrooms, covering the writing tools, the paywall and the reader apps.
+    teams: [Editor, Subscriptions, Reader Apps, Audience]
+    locations: [nyc, nyc_hybrid, remote_us]
+  Vantage Federal:
+    openings: 14
+    blurb: Vantage Federal delivers data platforms to public sector agencies. Most of our work happens on customer sites.
+    teams: [Mission Systems, Data Engineering, Field Engineering]
+    locations: [arlington, arlington, nyc]
+    clearance: true
+  Tailspin:
+    openings: 22
+    blurb: Tailspin is a travel booking platform for corporate travel managers, handling flights, hotels and policy in one place.
+    teams: [Booking, Policy Engine, Supplier Integrations, Mobile]
+    locations: [nyc, remote_us, seattle, london, toronto]
+  Wingtip:
+    openings: 18
+    blurb: Wingtip builds point-of-sale and inventory tools for independent footwear and apparel stores.
+    teams: [Point of Sale, Inventory, Storefront, Payments]
+    locations: [nyc_hybrid, nyc, remote_us, sf]
+  Copperline:
+    openings: 16
+    blurb: Copperline provides energy usage analytics to commercial building operators, turning meter data into savings plans.
+    teams: [Ingestion, Analytics, Customer Portal]
+    locations: [denver, nyc, remote_us]
+  Fernhollow:
+    openings: 12
+    blurb: Fernhollow is a small studio building tools for community gardens and local food co-ops.
+    teams: [Membership, Marketplace]
+    locations: [remote_us, nyc_hybrid]
+  Kestrel Systems:
+    openings: 20
+    blurb: Kestrel Systems makes observability software for teams running large Kubernetes fleets.
+    teams: [Agent, Query Engine, Alerting, Console]
+    locations: [sf, seattle, remote_us, nyc, bangalore]
+  Lumenfield:
+    openings: 28
+    blurb: Lumenfield is an analytics product for subscription businesses. Finance and growth teams use it to understand retention and revenue.
+    teams: [Dashboards, Data Pipeline, Billing Integrations, Growth]
+    locations: [nyc, nyc_hybrid, remote_us, remote_us]
+  Brightwater:
+    openings: 16
+    blurb: Brightwater helps water utilities detect leaks and plan maintenance using sensor data.
+    teams: [Sensor Platform, Field App, Planning]
+    locations: [boston, nyc, remote_us]
+  Marlowe Robotics:
+    openings: 14
+    blurb: Marlowe Robotics builds warehouse picking robots and the fleet software that coordinates them.
+    teams: [Fleet Control, Perception, Operator Console]
+    locations: [boston, sf, nyc]
+  Pallet & Pine:
+    openings: 14
+    blurb: Pallet & Pine is an online marketplace for reclaimed building materials, connecting salvage yards with contractors and homeowners.
+    teams: [Marketplace, Seller Tools, Checkout]
+    locations: [nyc, nyc_hybrid, remote_us]
+  Stackyard:
+    openings: 18
+    blurb: Stackyard gives engineering teams preview environments for every pull request.
+    teams: [Environments, Developer Experience, Control Plane, Billing]
+    locations: [nyc, remote_us, remote_us, berlin]
+
+# Location labels as boards actually write them.
+locations:
+  nyc: ["New York, NY", "New York", "New York City, NY", "NYC"]
+  nyc_hybrid: ["New York, NY (Hybrid)", "Hybrid - New York, NY", "New York, NY or Remote - US"]
+  remote_us: ["Remote - US", "Remote, United States", "United States (Remote)", "Remote (US)"]
+  sf: ["San Francisco, CA", "San Francisco Bay Area"]
+  seattle: ["Seattle, WA"]
+  austin: ["Austin, TX"]
+  boston: ["Boston, MA"]
+  chicago: ["Chicago, IL"]
+  denver: ["Denver, CO"]
+  charlotte: ["Charlotte, NC"]
+  arlington: ["Arlington, VA", "Arlington, VA (On-site)"]
+  london: ["London, UK", "Remote - EMEA"]
+  toronto: ["Toronto, Canada"]
+  berlin: ["Berlin, Germany"]
+  bangalore: ["Bengaluru, India"]
+
+# Role archetypes. weight sets how often each appears; stacks names which
+# requirement bundles it draws from; years is the range the posting asks for
+# (null = the posting states no years).
+roles:
+  - key: swe
+    weight: 14
+    department: Engineering
+    titles:
+      - "Software Engineer"
+      - "Software Engineer, {team}"
+      - "Software Engineer II"
+      - "Software Engineer II, {team}"
+      - "Software Engineer ({team})"
+    years: [2, 3, 3, 4, 5, null]
+    stacks: [core, core, core, partial, offstack]
+    family: product
+  - key: fullstack
+    weight: 8
+    department: Engineering
+    titles:
+      - "Full Stack Engineer"
+      - "Full Stack Engineer, {team}"
+      - "Full-Stack Engineer, {team}"
+      - "Fullstack Software Engineer"
+    years: [2, 3, 3, 4, null]
+    stacks: [core, core, partial]
+    family: product
+  - key: backend
+    weight: 8
+    department: Engineering
+    titles:
+      - "Backend Engineer"
+      - "Backend Engineer, {team}"
+      - "Backend Software Engineer, {team}"
+    years: [3, 3, 4, 5, null]
+    stacks: [backend, backend, offstack, partial]
+    family: product
+  - key: frontend
+    weight: 6
+    department: Engineering
+    titles:
+      - "Frontend Engineer"
+      - "Frontend Engineer, {team}"
+      - "Front End Engineer"
+    years: [2, 3, 4, null]
+    stacks: [frontend, frontend, partial]
+    family: product
+  - key: senior
+    weight: 12
+    department: Engineering
+    titles:
+      - "Senior Software Engineer"
+      - "Senior Software Engineer, {team}"
+      - "Senior Backend Engineer"
+      - "Senior Full Stack Engineer, {team}"
+      - "Senior Frontend Engineer"
+    years: [5, 5, 6, 7, 8, 8, 10]
+    stacks: [core, backend, offstack, partial]
+    family: product
+  - key: leadership
+    weight: 9
+    department: Engineering
+    titles:
+      - "Staff Software Engineer"
+      - "Staff Software Engineer, {team}"
+      - "Principal Engineer, {team}"
+      - "Engineering Manager, {team}"
+      - "Tech Lead, {team}"
+      - "Director of Engineering"
+    years: [8, 10, 12, null]
+    stacks: [backend, core, offstack]
+    family: product
+  - key: early
+    weight: 3
+    department: Engineering
+    titles:
+      - "Software Engineer Intern (Summer)"
+      - "Software Engineer, New Grad"
+      - "Contract Software Engineer (6 months)"
+    years: [null, null, 1]
+    stacks: [core, partial]
+    family: product
+  - key: data
+    weight: 5
+    department: Data
+    titles:
+      - "Data Engineer"
+      - "Analytics Engineer"
+      - "Data Scientist, {team}"
+      - "Machine Learning Engineer"
+    years: [3, 4, 5, null]
+    stacks: [data]
+    family: data
+  - key: infra
+    weight: 5
+    department: Infrastructure
+    titles:
+      - "Site Reliability Engineer"
+      - "DevOps Engineer"
+      - "Platform Engineer"
+      - "Security Engineer"
+    years: [3, 4, 5, 6]
+    stacks: [infra]
+    family: infra
+  - key: mobile
+    weight: 3
+    department: Engineering
+    titles: ["iOS Engineer", "Android Engineer", "Mobile Engineer, {team}"]
+    years: [3, 4, null]
+    stacks: [mobile]
+    family: product
+  - key: qa
+    weight: 2
+    department: Engineering
+    titles: ["QA Engineer", "Software Engineer in Test"]
+    years: [2, 3, null]
+    stacks: [qa]
+    family: product
+  - key: product
+    weight: 5
+    department: Product
+    titles:
+      - "Product Manager, {team}"
+      - "Product Designer"
+      - "Product Designer, {team}"
+      - "UX Researcher"
+    years: [3, 4, 5, null]
+    stacks: [none]
+    family: business
+  - key: gtm
+    weight: 13
+    department: Go to Market
+    titles:
+      - "Account Executive, Mid-Market"
+      - "Sales Development Representative"
+      - "Customer Success Manager"
+      - "Solutions Engineer"
+      - "Technical Recruiter"
+      - "Marketing Lead"
+      - "Support Specialist"
+      - "Financial Analyst"
+      - "People Operations Generalist"
+      - "Revenue Operations Analyst"
+    years: [1, 2, 3, 5, null]
+    stacks: [none, none, solutions]
+    family: business
+
+# Requirement bundles. Each line is one bullet under "What we're looking for".
+stacks:
+  core:
+    - - Strong Python skills and experience designing and consuming REST APIs
+      - Production experience with React and modern TypeScript
+      - Comfort owning CI/CD pipelines end to end
+      - Experience deploying services on AWS
+    - - Fluency in Python on the server and React in the browser
+      - Experience designing a clean API that other teams build on
+      - Familiarity with GraphQL and Next.js
+      - Experience running microservices on Kubernetes
+    - - Solid experience with React, TypeScript and a Python backend
+      - A track record of shipping API changes without breaking clients
+      - Exposure to event streaming with Kafka
+      - Experience with AWS and infrastructure as code
+    - - Experience building web applications with React and Python
+      - Good judgment about API design and data modeling
+      - Working knowledge of CI/CD and automated testing
+    - - Strong Python and TypeScript, with React and Next.js on the front end
+      - Experience designing a GraphQL or REST API used by several teams
+      - Experience running microservices on Kubernetes in AWS
+      - Comfort with Kafka and with owning CI/CD for your services
+  partial:
+    - - Experience with React or a comparable component framework
+      - Experience with a typed language such as TypeScript or Go
+      - Familiarity with relational databases and SQL
+    - - Proficiency in Python
+      - Experience with relational databases and query tuning
+      - Exposure to AWS or another major cloud
+    - - Experience building against a third-party API
+      - Comfort working across the stack in JavaScript
+      - Experience with automated testing
+  backend:
+    - - Strong Python or Go skills
+      - Experience designing a high-traffic API
+      - Experience running microservices on Kubernetes in AWS
+      - Familiarity with Kafka or a similar event log
+    - - Deep experience with Python services and PostgreSQL
+      - Experience with API versioning, idempotency and retries
+      - Comfort with CI/CD, observability and on-call
+  frontend:
+    - - Expert-level React and TypeScript
+      - Experience with Next.js and server-side rendering
+      - A sharp eye for accessibility and performance
+      - Experience consuming a GraphQL API
+    - - Strong React fundamentals
+      - Experience building a design system
+      - Familiarity with modern CSS and browser performance tooling
+  offstack:
+    - - Strong Java and Spring Boot experience
+      - Experience with Oracle or SQL Server
+      - Familiarity with message queues
+    - - Professional experience in Go or Rust
+      - Experience with distributed systems fundamentals
+      - Familiarity with gRPC and Protocol Buffers
+    - - Experience with Ruby on Rails in production
+      - Comfort with Sidekiq, Redis and PostgreSQL
+    - - Experience with PHP and WordPress plugin development
+      - Familiarity with MySQL tuning
+    - - Experience with C# and .NET services
+      - Familiarity with Azure
+  data:
+    - - Strong SQL and Python
+      - Experience with dbt, Airflow or Dagster
+      - Experience with a cloud warehouse such as Snowflake or BigQuery
+    - - Experience building streaming pipelines on Kafka
+      - Proficiency in Python or Scala
+      - Familiarity with Spark
+    - - Experience training and shipping machine learning models
+      - Strong Python and a solid statistics background
+  infra:
+    - - Experience operating Kubernetes clusters in AWS
+      - Fluency in Terraform
+      - Experience building CI/CD systems that other engineers rely on
+      - Comfort being on call
+    - - Experience with Linux internals and networking
+      - Proficiency in Go or Python for tooling
+      - Experience with incident response and postmortems
+  mobile:
+    - - Strong Swift and SwiftUI experience
+      - Experience shipping an app with a large active user base
+      - Familiarity with consuming a GraphQL API
+    - - Strong Kotlin experience and familiarity with Jetpack Compose
+      - Experience with offline-first sync
+  qa:
+    - - Experience writing end-to-end tests with Playwright or Cypress
+      - Proficiency in TypeScript or Python
+      - Experience wiring tests into CI/CD
+  solutions:
+    - - Ability to read and write enough Python to build a proof of concept
+      - Experience explaining an API to a technical buyer
+      - Comfort leading a customer call
+  none: []
+
+years_lines:
+  - "{n}+ years of professional software engineering experience"
+  - "{n}+ years of experience building production software"
+  - "At least {n} years of experience in a similar role"
+  - "{n}+ years of relevant experience"
+
+intro:
+  product:
+    - "We're looking for a {title} to join our {team} team. You'll work with a small group of engineers, a designer and a product manager, and you'll own features from the first sketch through to production."
+    - "The {team} team is hiring a {title}. This is a hands-on role: you'll write code most days, review your teammates' work and help decide what we build next."
+    - "As a {title} on {team}, you'll build the parts of {company} our customers use every day. We care about clear thinking, steady delivery and software that stays up."
+  data:
+    - "We're hiring a {title} to help {company} make better decisions with data. You'll build pipelines and models that product and finance teams depend on."
+    - "As a {title}, you'll own datasets end to end, from ingestion to the dashboards and models built on top of them."
+  infra:
+    - "We're looking for a {title} to keep {company} fast and reliable. You'll build the platform other engineers deploy on and share the on-call rotation."
+    - "As a {title}, you'll own the infrastructure behind every request {company} serves, and the tooling engineers use to ship safely."
+  business:
+    - "{company} is hiring a {title}. You'll work closely with customers and with teams across the company, and you'll have real ownership from your first month."
+    - "We're looking for a {title} to help {company} grow. This role suits someone organized, curious and comfortable with ambiguity."
+
+does:
+  product:
+    - Build and ship features across the stack, from database migrations to the interface
+    - Write clear technical proposals and gather feedback before starting large changes
+    - Review pull requests with care and help keep the codebase healthy
+    - Work with design and product to scope work into small releases
+    - Take part in an on-call rotation and follow incidents through to a fix
+    - Improve test coverage and the reliability of our deploy pipeline
+    - Talk to customers to understand how they use what you build
+    - Break ambiguous problems into steps the team can deliver
+    - Measure the performance of what you ship and act on what you find
+    - Help new teammates get productive in their first weeks
+  data:
+    - Design and maintain batch and streaming pipelines
+    - Model data so analysts can answer questions without asking you
+    - Monitor data quality and fix problems at the source
+    - Partner with product teams to define the metrics that matter
+    - Keep warehouse costs sensible as volumes grow
+    - Document datasets and how they are produced
+  infra:
+    - Operate and improve our production clusters
+    - Build deploy tooling that makes the safe path the easy path
+    - Lead incident response and write honest postmortems
+    - Set service level objectives with product teams and track them
+    - Reduce cloud spend without slowing engineers down
+    - Automate the repetitive parts of running production
+  business:
+    - Own your work from planning to results and report on it plainly
+    - Build relationships with customers and understand their goals
+    - Work with product and engineering to pass on what you hear
+    - Keep our systems of record accurate and up to date
+    - Improve the processes your team relies on
+    - Represent {company} with care in every conversation
+
+nice:
+  - Experience at a company of a similar size and stage
+  - Background in a regulated industry
+  - Open source contributions you're proud of
+  - Experience mentoring other engineers
+  - Familiarity with accessibility standards
+  - Experience with feature flags and gradual rollouts
+  - Interest in the problem our customers have
+
+benefits:
+  - "The base salary range for this role is ${low},000 to ${high},000, plus equity. We offer medical, dental and vision coverage, a 401(k) match and sixteen weeks of parental leave."
+  - "Compensation: ${low},000 to ${high},000 base, depending on experience, with equity and an annual bonus. Benefits include health coverage from day one and a flexible time off policy."
+  - "We pay ${low},000 to ${high},000 for this role and share the range for every level internally. Benefits include health, dental and vision insurance, a learning budget and a home office stipend."
+
+clearance_lines:
+  - An active TS/SCI clearance is required for this position
+  - Candidates must hold a Top Secret clearance and be willing to take a polygraph
+  - This role requires a Top Secret clearance and work on a customer site
+
+closers:
+  - "{company} is an equal opportunity employer. We welcome applicants of every background and will provide reasonable accommodations during the hiring process."
+  - "We know great candidates don't always match every line of a job description. If the role interests you, we'd like to hear from you."
+  - "{company} considers all qualified applicants without regard to race, religion, gender, sexual orientation, national origin, age, disability or veteran status."

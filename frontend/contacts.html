@@ -7,14 +7,14 @@
   <h1>Contacts</h1>
   <span class="spacer"></span>
   <button class="primary" type="button"
-          onclick="var d = document.getElementById('add-contact'); d.open = !d.open">Add a contact</button>
+          data-action="toggle" data-target="add-contact">Add a contact</button>
 </header>
 <details id="add-contact" class="add-job">
   <summary hidden></summary>
   <p class="hint">For someone you found yourself. Leave anything you don't know blank.
   A firm with no person yet is fine.</p>
   <form hx-post="/contacts" hx-target="#add-contact-result" hx-swap="innerHTML"
-        hx-on::after-request="if (event.detail.xhr.getResponseHeader('HX-Trigger')) this.reset()">
+        data-after="reset-if-saved">
     <div class="contact-form-grid">
       <label>Name <input type="text" name="name"></label>
       <label>Company <input type="text" name="company"></label>
@@ -81,17 +81,5 @@
   {% include "_contacts_body.html" %}
 </div>
 <div id="modal"></div>
-<script>
-  // Row clicks open the detail modal, except on the row's own controls.
-  function opensContactModal(evt) {
-    return !evt.target.closest("a, button");
-  }
-  document.addEventListener("keydown", function (evt) {
-    if (evt.key === "Escape") {
-      var overlay = document.querySelector(".modal-overlay");
-      if (overlay) overlay.remove();
-    }
-  });
-</script>
 </div>
 {% endblock %}

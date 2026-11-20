@@ -96,7 +96,7 @@ def client(tmp_path):
     conn = db.get_connection(db_path)
     db.init_db(conn)
     seed(conn)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://localhost")
     client.db = conn
 
     def override():
@@ -113,15 +113,13 @@ def client(tmp_path):
 
 
 def test_lookup_unrecognized_url_shows_error(client):
-    page = client.get("/jobs/lookup", params={"url": "https://linkedin.com/jobs/view/1"}).text
+    page = client.post("/jobs/lookup", data={"url": "https://linkedin.com/jobs/view/1"}).text
     assert "Couldn&#39;t recognize that URL" in page or "Couldn't recognize that URL" in page
     assert 'name="company"' in page  # manual form still offered
 
 
 def test_lookup_existing_job_offers_track(client):
-    page = client.get(
-        "/jobs/lookup",
-        params={"url": "https://job-boards.greenhouse.io/acme/jobs/123456"},
+    page = client.post("/jobs/lookup", data={"url": "https://job-boards.greenhouse.io/acme/jobs/123456"},
     ).text
     assert "Already in the tool" in page
     assert "/jobs/1/track" in page.replace(
@@ -133,9 +131,7 @@ def test_lookup_existing_job_offers_track(client):
 def test_lookup_existing_tracked_job_says_so(client):
     job_id = client.db.execute("SELECT id FROM jobs").fetchone()["id"]
     client.post(f"/jobs/{job_id}/track")
-    page = client.get(
-        "/jobs/lookup",
-        params={"url": "https://job-boards.greenhouse.io/acme/jobs/123456"},
+    page = client.post("/jobs/lookup", data={"url": "https://job-boards.greenhouse.io/acme/jobs/123456"},
     ).text
     assert "already" in page.lower() and "tracker" in page.lower()
     assert "Track it" not in page
@@ -146,9 +142,7 @@ def test_lookup_success_prefills_form(client, monkeypatch):
                "url": "https://job-boards.greenhouse.io/newco/jobs/777",
                "description": "React and node.", "department": None, "posted_at": None}
     monkeypatch.setattr(lookup, "fetch_posting", lambda *a, **kw: posting)
-    page = client.get(
-        "/jobs/lookup",
-        params={"url": "https://job-boards.greenhouse.io/newco/jobs/777"},
+    page = client.post("/jobs/lookup", data={"url": "https://job-boards.greenhouse.io/newco/jobs/777"},
     ).text
     assert 'value="Newco"' in page  # slug prettified (company not in watchlist)
     assert 'value="Staff Nothing"' in page
@@ -160,9 +154,7 @@ def test_lookup_fetch_error_is_shown(client, monkeypatch):
     def boom(*a, **kw):
         raise common.BoardNotFound("404 from upstream")
     monkeypatch.setattr(lookup, "fetch_posting", boom)
-    page = client.get(
-        "/jobs/lookup",
-        params={"url": "https://job-boards.greenhouse.io/newco/jobs/777"},
+    page = client.post("/jobs/lookup", data={"url": "https://job-boards.greenhouse.io/newco/jobs/777"},
     ).text
     assert "Fetch failed" in page and "404 from upstream" in page
 
@@ -175,9 +167,7 @@ def test_lookup_existing_gate_failed_job_warns(client):
                    'age: posted 260 days ago (max 30)', 0)"""
     )
     client.db.commit()
-    page = client.get(
-        "/jobs/lookup",
-        params={"url": "https://job-boards.greenhouse.io/acme/jobs/654321"},
+    page = client.post("/jobs/lookup", data={"url": "https://job-boards.greenhouse.io/acme/jobs/654321"},
     ).text
     assert "Already in the tool" in page
     assert "gate-rejected" in page and "260 days" in page
