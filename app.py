@@ -1245,8 +1245,8 @@ def schedule_body(request: Request, day: str | None = None, conn=Depends(get_db)
     )
 
 
-def _known_block(key: str) -> None:
-    if key not in {b["key"] for b in _schedule_cfg()["blocks"]}:
+def _known_block(key: str, day: date) -> None:
+    if key not in schedule.block_keys(_schedule_cfg(), day):
         raise HTTPException(404, f"no block {key!r}")
 
 
@@ -1260,7 +1260,7 @@ def schedule_log(
 ):
     """Mark a block done by hand. Any block, auto ones included."""
     when = _parse_day(day)
-    _known_block(key)
+    _known_block(key, when)
     db.log_block(conn, when.isoformat(), key, note.strip() or None, "ui")
     return templates.TemplateResponse(
         request, "_schedule_body.html", _schedule_context(conn, when)
