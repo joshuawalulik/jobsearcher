@@ -26,11 +26,20 @@ _PATTERNS = [
 ]
 
 
+# A board name once decoded: words, with single dots or spaces between them.
+# Anything else (a slash, "..", a "?") would reshape the API address it is
+# put into, so such a URL is not recognized.
+_SLUG = re.compile(r"[\w-]+(?:[ .][\w-]+)*")
+
+
 def parse_job_url(url: str) -> tuple[str, str, str] | None:
     """(ats_type, slug, external_id) for a recognized posting URL, else None."""
     for ats_type, pattern in _PATTERNS:
         if match := pattern.search(url):
-            return ats_type, unquote(match.group(1)), match.group(2)
+            slug = unquote(match.group(1))
+            if not _SLUG.fullmatch(slug):
+                return None
+            return ats_type, slug, match.group(2)
     return None
 
 

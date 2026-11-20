@@ -9,14 +9,14 @@
   </p>
   <div class="p-actions">
     {% if job.tracked %}
-    <a class="tracked {{ job.tracked }}" style="margin-left:0" href="/tracker">{{ job.tracked }}</a>
+    <a class="tracked {{ job.tracked }} flush" href="/tracker">{{ job.tracked }}</a>
     {% else %}
     <button class="primary sm" type="button"
-            onclick="document.querySelector('#job-{{ job.id }} .track').click()">Track</button>
+            data-action="track-row" data-job="{{ job.id }}">Track</button>
     {% endif %}
     <button class="sm" hx-post="/jobs/{{ job.id }}/dismiss" hx-swap="none"
-            hx-on::after-request="dropRow({{ job.id }})">Dismiss</button>
-    {% if job.url %}<a href="{{ job.url }}" target="_blank" rel="noopener">Posting <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}
+            data-after="drop-row" data-job="{{ job.id }}">Dismiss</button>
+    {% if job.url | http_url %}<a href="{{ job.url | http_url }}" target="_blank" rel="noopener">Posting <svg class="i" aria-hidden="true"><use href="#out"/></svg></a>{% endif %}
   </div>
 </div>
 {% if job.breakdown %}

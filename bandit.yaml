@@ -1,0 +1,5 @@
+# Static security checks. Run from the repo root:
+#   uvx bandit -c bandit.yaml -r .
+# A flagged line that has been reviewed carries "# nosec <rule>: why", so a
+# new finding stands out.
+exclude_dirs: [tests, .venv, .claude]

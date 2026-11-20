@@ -1,7 +1,7 @@
 {# One feed row. The full reasons and description load into the report on click. #}
 <article id="job-{{ job.id }}" class="job-row{% if job.tracked %} decided{% endif %}{% if job.score < 50 %} low{% endif %}" tabindex="0"
          hx-get="/jobs/{{ job.id }}/detail" hx-target="#report" hx-swap="innerHTML"
-         hx-trigger="click[opensJob(event)], keyup[key=='Enter' && opensJob(event)]">
+         hx-trigger="openPanel" data-opens>
   <span class="sc">{{ '%.0f' % job.score }}</span>
   <div>
     <h2>{{ job.title }}</h2>
@@ -12,10 +12,10 @@
   </div>
   {% if job.strip %}
   <div class="strip" title="Title {{ '%g' % job.strip.title }}, required {{ '%g' % job.strip.required }}, preferred {{ '%g' % job.strip.preferred }}, penalty {{ '%g' % job.strip.penalty }}">
-    <i class="st-title" style="width: {{ job.strip.widths.title }}%"></i>
-    <i class="st-required" style="width: {{ job.strip.widths.required }}%"></i>
-    <i class="st-preferred" style="width: {{ job.strip.widths.preferred }}%"></i>
-    <i class="st-penalty" style="width: {{ job.strip.widths.penalty }}%"></i>
+    <i class="st-title {{ job.strip.widths.title | width_class }}"></i>
+    <i class="st-required {{ job.strip.widths.required | width_class }}"></i>
+    <i class="st-preferred {{ job.strip.widths.preferred | width_class }}"></i>
+    <i class="st-penalty {{ job.strip.widths.penalty | width_class }}"></i>
   </div>
   {% else %}<span></span>{% endif %}
   <span class="act">
@@ -26,5 +26,5 @@
     {% endif %}
   </span>
   <button class="icon dismiss" aria-label="Dismiss" title="Dismiss" hx-post="/jobs/{{ job.id }}/dismiss"
-          hx-swap="none" hx-on::after-request="dropRow({{ job.id }})"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
+          hx-swap="none" data-after="drop-row" data-job="{{ job.id }}"><svg class="i" aria-hidden="true"><use href="#close"/></svg></button>
 </article>

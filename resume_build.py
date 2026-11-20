@@ -61,7 +61,7 @@ YAML schema:
 import argparse
 import html
 import re
-import subprocess
+import subprocess  # nosec B404: runs Chrome to print the PDF
 from pathlib import Path
 
 import yaml
@@ -386,7 +386,7 @@ def build_pdf(data: dict, out_path: Path) -> bool:
     html_path = out_path.with_suffix(".pdf.html")
     html_path.write_text(build_html(data))
     try:
-        subprocess.run(
+        subprocess.run(  # nosec B603: fixed program, paths this module built
             [str(CHROME), "--headless", "--disable-gpu", "--no-pdf-header-footer",
              f"--print-to-pdf={out_path}", str(html_path)],
             check=True, capture_output=True, timeout=60,

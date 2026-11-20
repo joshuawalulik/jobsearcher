@@ -44,7 +44,7 @@ def client(tmp_path):
     db_path = tmp_path / "test.db"
     conn = db.get_connection(db_path)
     db.init_db(conn)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://localhost")
     client.job_ids = seed(conn)
     client.db = conn
 

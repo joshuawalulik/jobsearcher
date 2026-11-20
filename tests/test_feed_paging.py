@@ -44,7 +44,7 @@ def client(conn, tmp_path):
             request_conn.close()
 
     app.dependency_overrides[get_db] = override
-    yield TestClient(app)
+    yield TestClient(app, base_url="http://localhost")
     app.dependency_overrides.clear()
 
 

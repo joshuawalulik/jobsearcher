@@ -1,0 +1,418 @@
+# Contacts for the demo's outreach pages (demo_seed.py). Every person and
+# firm here is invented; addresses use the reserved .example domain.
+#
+#   contacted / replied / new_message   workdays before the anchor day
+#   interactions   [workdays, channel, direction, summary], oldest first.
+#                  A fifth item gives the earliest slot of the anchor day the
+#                  entry exists in (only for entries dated 0).
+#   link           tracker.yaml key of an application this person is tied to
+#   conversation   file under demo_data/conversations/, linked from the notes
+
+contacts:
+  # --- referrals: people Alex actually knows ---
+  - name: Priya Raman
+    company: Contoso
+    email: priya.raman@contoso.example
+    track: referral
+    kind_detail: Former teammate, now a senior engineer on Realtime Sync
+    location: NY
+    ask: Refer me when a mid-level role opens on a product team
+    status: Replied
+    contacted: 15
+    replied: 4
+    next_step: Send her the Identity posting once the resume is ready
+    source: own_pipeline
+    standing_referral: true
+    conversation: priya-raman.md
+    notes: Offered to refer me for any role that fits. Prefers a heads-up before I apply.
+    interactions:
+      - [15, linkedin, out, "Asked how Contoso has been and whether her team is hiring"]
+      - [14, linkedin, in, "Happy to refer me; says to send any posting that looks right"]
+      - [5, linkedin, out, "Sent the Search posting and asked about the team"]
+      - [4, linkedin, in, "Search is a good team; she suggested Identity as a closer fit"]
+  - name: Tomas Okafor
+    company: Hartwell & Reed
+    email: tomas.okafor@hartwellreed.example
+    track: referral
+    kind_detail: Friend from a previous job, engineering manager
+    location: NY
+    ask: Introduce me to the hiring manager for the Software Engineer opening
+    status: Replied
+    contacted: 6
+    replied: 4
+    next_step: Ask who the hiring manager is and when they are back
+    source: own_pipeline
+    link: con_manual
+    interactions:
+      - [6, email, out, "Asked whether his company is hiring engineers"]
+      - [4, email, in, "Sent the opening; it isn't on a public board yet"]
+  - name: Mei-Lin Zhao
+    company: Oakbridge Financial
+    email: meilin.zhao@oakbridge.example
+    track: referral
+    kind_detail: College friend, product analyst on Cards
+    location: NY
+    ask: What is the Cards engineering team like to work with?
+    status: Sent
+    contacted: 6
+    source: own_pipeline
+    notes: Works with the Cards engineers daily. Not an engineer herself.
+    interactions:
+      - [6, linkedin, out, "Asked about the Cards team before applying"]
+  - name: Darius Kolb
+    company: Lumenfield
+    track: referral
+    kind_detail: Met at a data meetup, analytics engineer
+    location: NY
+    ask: Coffee to hear how the data team works
+    status: Not started
+    source: own_pipeline
+    notes: Hold until the Lumenfield offer is settled.
+
+  # --- mentors: advice only, no follow-up clock ---
+  - name: Helen Marsh
+    email: helen.marsh@mentor.example
+    track: mentor
+    kind_detail: Engineering director and former manager
+    location: Remote
+    ask: Feedback on the resume and how to tell the last two years
+    status: Replied
+    contacted: 12
+    replied: 2
+    next_step: Send the revised resume after the bullet edits
+    source: own_pipeline
+    conversation: helen-marsh.md
+    notes: Said to lead with outcomes and cut the summary.
+    interactions:
+      - [12, email, out, "Asked for resume feedback"]
+      - [8, email, in, "Detailed notes: lead with outcomes, cut the summary"]
+      - [7, email, out, "Thanked her and asked one follow-up about the projects section"]
+      - [2, email, in, "Projects section looks right; send the next version when ready"]
+  - name: Oluwaseun Adeyemi
+    email: seun.adeyemi@mentor.example
+    track: mentor
+    kind_detail: Staff engineer, met through an alumni group
+    location: NY
+    ask: How his team runs system design interviews
+    status: Sent
+    contacted: 2
+    source: own_pipeline
+    interactions:
+      - [2, linkedin, out, "Asked for 20 minutes on system design interviews"]
+
+  # --- agency recruiters ---
+  - name: Pat Doe
+    company: Example Staffing
+    email: pat.doe@examplestaffing.example
+    track: agency
+    kind_detail: Technical recruiter, fintech and logistics desks
+    priority: A
+    location: NY
+    ask: Are you working any mid-level full-stack searches in New York?
+    status: Referred / submitted
+    contacted: 11
+    replied: 3
+    next_step: Check in Friday on the Globex submission
+    source: own_pipeline
+    link: app_globex
+    notes: Submitted me to Globex for the Integrations role.
+    interactions:
+      - [11, linkedin, out, "Introduced myself and asked about open searches"]
+      - [10, linkedin, in, "Has a logistics client hiring; asked for a resume"]
+      - [10, email, out, "Sent the resume"]
+      - [3, call, in, "Walked through the Globex role; will submit me this week"]
+      - [0, email, out, "Asked for an update on the Globex submission", 1]
+  - name: Carmen Villanueva
+    company: Northgate Search
+    track: agency
+    kind_detail: Recruiter, wrote first on LinkedIn
+    priority: C
+    location: NY
+    status: Not started
+    new_message: 1
+    source: linkedin
+    conversation: leads/carmen-villanueva.md
+    notes: Pitched a Java role at a trading firm. No reply sent yet.
+    interactions:
+      - [1, linkedin, in, "InMail: Java opportunity at a trading firm in Midtown"]
+  - name: Gus Lindqvist
+    company: Brightline Talent
+    email: gus.lindqvist@brightlinetalent.example
+    track: agency
+    kind_detail: Senior technical recruiter, product engineering
+    priority: A
+    location: NY
+    ask: Are you working any mid-level full-stack searches in New York?
+    status: Sent
+    contacted: 5
+    source: research
+    interactions:
+      - [5, email, out, "First message with the resume attached"]
+  - name: Nadia Rahman
+    company: Brightline Talent
+    email: nadia.rahman@brightlinetalent.example
+    track: agency
+    kind_detail: Recruiter, startup desk
+    priority: B
+    location: NY
+    ask: Are you working any mid-level full-stack searches in New York?
+    status: Follow-up 1 sent
+    contacted: 13
+    source: research
+    interactions:
+      - [13, email, out, "First message with the resume attached"]
+      - [8, email, out, "Follow-up: now interviewing at two companies"]
+  - name: Owen Castellanos
+    company: Meridian Tech Partners
+    email: owen.castellanos@meridiantech.example
+    track: agency
+    kind_detail: Recruiter, enterprise accounts
+    priority: B
+    location: NY
+    ask: Are you working any mid-level full-stack searches in New York?
+    status: Follow-up 2 sent
+    contacted: 20
+    source: peer_list
+    peer_history: A friend placed through this desk two years ago; slow to reply.
+    interactions:
+      - [20, email, out, "First message with the resume attached"]
+      - [15, email, out, "First follow-up"]
+      - [8, email, out, "Second follow-up"]
+  - name: Ingrid Solberg
+    company: Meridian Tech Partners
+    email: ingrid.solberg@meridiantech.example
+    track: agency
+    kind_detail: Principal recruiter, healthcare technology
+    priority: A
+    location: NY
+    ask: Which healthcare searches are open at my level?
+    status: Call scheduled
+    contacted: 7
+    replied: 2
+    next_step: "Call Thursday at 11 AM: ask which searches are open and what they pay"
+    source: peer_list
+    interactions:
+      - [7, email, out, "First message with the resume attached"]
+      - [2, email, in, "Has two healthcare clients; offered a call"]
+      - [0, email, out, "Confirmed Thursday at 11", 1]
+  - name: Marcus Bell
+    company: Harbor Row Staffing
+    track: agency
+    kind_detail: Recruiter, contract roles
+    priority: C
+    location: NJ
+    status: Cold
+    contacted: 30
+    source: peer_list
+    notes: Contract roles only; no reply after two follow-ups.
+    interactions:
+      - [30, email, out, "First message"]
+      - [25, email, out, "First follow-up"]
+      - [18, email, out, "Second follow-up"]
+  - company: Fieldstone Recruiting
+    track: agency
+    kind_detail: Boutique firm, product engineering
+    priority: B
+    location: NY
+    status: Not started
+    source: peer_list
+    verify_flag: Find a named technical recruiter here before reaching out
+
+  # --- company recruiters ---
+  - name: Jordan Avery
+    company: Lumenfield
+    email: jordan.avery@lumenfield.example
+    track: company_recruiter
+    kind_detail: Technical recruiter, product and data teams
+    priority: A
+    location: NY
+    status: Replied
+    contacted: 30
+    replied: 4
+    next_step: Reply about the offer by Friday
+    source: own_pipeline
+    link: offer
+    interactions:
+      - [30, call, in, "Phone screen for the Dashboards role"]
+      - [4, email, in, "Sent the offer letter"]
+      - [0, email, out, "Asked two questions about the offer letter", 1]
+  - name: Riley Brandt
+    company: Oakbridge Financial
+    email: riley.brandt@oakbridge.example
+    track: company_recruiter
+    kind_detail: Recruiting lead, Lending and Cards
+    priority: A
+    location: NY
+    status: Replied
+    contacted: 27
+    replied: 19
+    next_step: Message her the day the Cards application goes in
+    source: own_pipeline
+    notes: Turned me down for Lending but said to apply again for a closer fit.
+    interactions:
+      - [27, email, in, "Invited me to an introductory call for the Lending role"]
+      - [19, email, in, "Lending team chose a candidate with more domain experience"]
+      - [19, email, out, "Thanked her and asked to stay in touch"]
+  - name: Sam Ito
+    company: Contoso
+    email: sam.ito@contoso.example
+    track: company_recruiter
+    kind_detail: Recruiter, Editor and Search teams
+    priority: A
+    location: NY
+    status: Replied
+    contacted: 3
+    replied: 2
+    source: own_pipeline
+    link: int_contoso
+    interactions:
+      - [3, email, in, "Invited me to a video interview with the hiring manager"]
+      - [2, email, in, "Still working through things; news early next week"]
+  - name: Dana Whitfield
+    company: Northwind Labs
+    email: dana.whitfield@northwindlabs.example
+    track: company_recruiter
+    kind_detail: Head of engineering, reads applications herself
+    priority: A
+    location: NY
+    status: Replied
+    contacted: 7
+    replied: 7
+    next_step: Wait for her note on Tuesday
+    source: own_pipeline
+    link: app_northwind
+    interactions:
+      - [7, email, in, "Wrote back personally after the application"]
+  - name: Keisha Monroe
+    company: Acme Corp
+    email: keisha.monroe@acme.example
+    track: company_recruiter
+    kind_detail: Technical recruiter, platform teams
+    priority: A
+    location: NY
+    ask: I applied for the Developer Platform role. Are you the right person to talk to about it?
+    status: Drafted
+    next_step: Send on the day the Developer Platform application goes in
+    source: research
+  - name: Felix Braun
+    company: Quillstone
+    email: felix.braun@quillstone.example
+    track: company_recruiter
+    kind_detail: Talent partner, engineering
+    priority: A
+    location: NY
+    ask: I applied for the Subscriptions role. Who handles engineering hiring?
+    status: Sent
+    contacted: 1
+    source: research
+    interactions:
+      - [1, email, out, "First message, naming the Subscriptions application"]
+  - name: Yuki Tanaka
+    company: Harborlight Health
+    track: company_recruiter
+    kind_detail: Recruiter, engineering and data
+    priority: B
+    location: Remote
+    ask: Who handles experienced engineering hiring here?
+    status: Not started
+    source: research
+    verify_flag: Confirm she still covers engineering; her profile mentions clinical roles
+  - name: Andre Silva
+    company: Tailspin
+    email: andre.silva@tailspin.example
+    track: company_recruiter
+    kind_detail: Senior recruiter, product engineering
+    priority: A
+    location: NY
+    ask: I'm applying for the Policy Engine role today. Are you the recruiter on it?
+    status: Drafted
+    next_step: Send after submitting the Policy Engine application
+    source: research
+  - name: Beatrix Holloway
+    company: Stackyard
+    email: beatrix.holloway@stackyard.example
+    track: company_recruiter
+    kind_detail: Recruiter, all engineering roles
+    priority: B
+    location: Remote
+    ask: Who handles experienced engineering hiring here?
+    status: Sent
+    contacted: 8
+    source: research
+    interactions:
+      - [8, email, out, "First message with the resume attached"]
+  - name: Lars Nystrom
+    company: Globex
+    email: lars.nystrom@globex.example
+    track: company_recruiter
+    kind_detail: Talent acquisition partner
+    priority: B
+    location: NY
+    ask: Who handles experienced engineering hiring here?
+    status: Not started
+    source: peer_list
+    peer_history: Replied to a friend within a day last spring.
+  - name: Simone Laurent
+    company: Fabrikam
+    track: company_recruiter
+    kind_detail: Campus recruiter
+    priority: C
+    location: NY
+    status: Not started
+    source: peer_list
+    notes: Recruits students and new graduates, so she can only pass a name along.
+  - name: Theo Vasquez
+    company: Wingtip
+    email: theo.vasquez@wingtip.example
+    track: company_recruiter
+    kind_detail: Recruiter, retail engineering
+    priority: C
+    location: CA
+    status: Cold
+    contacted: 28
+    source: research
+    interactions:
+      - [28, email, out, "First message"]
+      - [23, email, out, "First follow-up"]
+      - [16, email, out, "Second follow-up"]
+
+  # --- on file as Skip ---
+  - name: Noor Haddad
+    company: Initech
+    email: noor.haddad@initech.example
+    track: company_recruiter
+    kind_detail: Recruiter
+    priority: skip
+    location: NY
+    status: Skip
+    source: peer_list
+    notes: Initech is on the do-not-contact list.
+  - name: Wendell Price
+    company: Copperline
+    track: company_recruiter
+    kind_detail: Former recruiter at Copperline
+    priority: skip
+    location: Remote
+    status: Skip
+    source: peer_list
+    notes: Left Copperline in the spring and no longer recruits.
+  - name: Greta Olsen
+    company: Marlowe Robotics
+    track: company_recruiter
+    kind_detail: Recruiter, hardware and manufacturing
+    priority: skip
+    location: NY
+    status: Skip
+    source: research
+    notes: Hardware roles only.
+
+  # --- removed from the tool (kept so a re-import can't bring them back) ---
+  - name: Casey Lund
+    company: Brightwater
+    track: company_recruiter
+    kind_detail: Recruiter
+    priority: B
+    location: NY
+    status: Not started
+    source: peer_list
+    removed: 6

@@ -1,0 +1,17 @@
+# What the app imports directly. requirements.txt is generated from this
+# file with every version pinned and hashed; edit here, then recompile:
+#
+#   uv pip compile --universal --python-version 3.12 --generate-hashes \
+#       requirements.in -o requirements.txt
+#   uv pip compile --universal --python-version 3.12 --generate-hashes \
+#       requirements-dev.in -o requirements-dev.txt
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+pyyaml
+ruamel.yaml
+httpx
+mcp
+python-docx
+openpyxl

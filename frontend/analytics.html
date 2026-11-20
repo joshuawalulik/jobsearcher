@@ -9,7 +9,7 @@
 {% macro meter_row(row) -%}
 <div class="meter-row">
   <span class="meter-label">{{ row.label }}</span>
-  <div class="meter"><div class="meter-fill" style="width: {{ row.rate or 0 }}%"></div></div>
+  <div class="meter"><div class="meter-fill {{ row.rate | width_class }}"></div></div>
   <span class="meter-value">{{ pct(row) }}</span>
 </div>
 {%- endmacro %}
@@ -51,7 +51,7 @@ the events history — a card that is rejected now but had an interview still co
     {% for lane in funnel.lanes %}
     <div class="bar-row funnel-lane">
       <span>{{ lane.name }}</span>
-      <i style="width: {{ (lane.count * 100 / top) if top else 0 }}%"></i>
+      <i class="{{ ((lane.count * 100 / top) if top else 0) | width_class }}"></i>
       <b>{{ lane.count }}</b>
     </div>
     {% endfor %}

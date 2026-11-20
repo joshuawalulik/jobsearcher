@@ -13,18 +13,21 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.routing import Match
 from markupsafe import Markup, escape
 
 import analytics
 import db
+import demo
 import email_sync
 import outreach
 import profile_io
 import referral_watch
 import schedule
+import security
 from autosweep import sweep_and_rescore
 from scoring.rescore import rescore_all
 from scoring.score import score_job
@@ -33,7 +36,8 @@ from scrapers import lookup
 from scrapers.sweep import load_profile
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
-PROFILE_PATH = profile_io.PROFILE_PATH
+# Demo mode (JOBSEARCHER_DEMO=1) reads its own profile and never the real one.
+PROFILE_PATH = demo.PROFILE_PATH if demo.ENABLED else profile_io.PROFILE_PATH
 REJECTED_ROWS_PER_GATE = 100
 SWEEP_TIMES = ((8 * 60 + 30, "8:30 AM"), (16 * 60 + 30, "4:30 PM"))  # launchd schedule
 VIEW_DECIDE, VIEW_ALL = "decide", "all"  # Matches views; decide is the default
@@ -43,13 +47,43 @@ DISMISSED_ROWS = 100
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    conn = db.get_connection()
-    db.init_db(conn)
-    conn.close()
+    if demo.ENABLED:
+        demo.start_logging()
+        demo.ensure_seed()  # the real database is never opened in demo mode
+    else:
+        conn = db.get_connection()
+        db.init_db(conn)
+        conn.close()
     yield
 
 
-app = FastAPI(title="Job Search Tool", lifespan=lifespan)
+async def check_form(request: Request) -> None:
+    """Size and shape limits on every submitted form, whichever route reads it."""
+    if request.method in security.SAFE_METHODS:
+        return
+    kind = request.headers.get("content-type", "").lower()
+    if not kind.startswith(("application/x-www-form-urlencoded", "multipart/form-data")):
+        return
+    form = await request.form()
+    # The matched route's own path, so a path prefix in front of the app
+    # (a proxy's root_path) can't change which limits apply.
+    route = request.scope.get("route")
+    path = getattr(route, "path", request.url.path)
+    problem = security.form_problem(path, form.multi_items())
+    if problem:
+        raise HTTPException(status_code=422, detail=problem)
+
+
+# No generated API pages: the pages are the interface, and Swagger's page
+# loads scripts from a CDN, which the content security policy forbids.
+app = FastAPI(
+    title="Job Search Tool",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    dependencies=[Depends(check_form)],
+)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
 
 
@@ -62,9 +96,108 @@ async def revalidate_static(request: Request, call_next):
     if request.url.path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-cache"
     return response
-templates = Jinja2Templates(directory=FRONTEND_DIR)
 
-CONVERSATIONS_DIR = db.CONVERSATIONS_DIR
+
+def _route_path(scope) -> str | None:
+    """The declared path of the route this request will reach, found the way
+    the router finds it, so a path prefix in front of the app changes nothing."""
+    for route in app.router.routes:
+        if route.matches(scope)[0] is Match.FULL:
+            return getattr(route, "path", None)
+    return None
+
+
+def _is_https(request: Request) -> bool:
+    return request.url.scheme == "https"
+
+
+def _demo_refused(request: Request, status: int, reason: str) -> Response:
+    """A refusal a visitor can read: a line for HTMX's toast, a page otherwise."""
+    if request.headers.get("HX-Request"):
+        return PlainTextResponse(reason, status_code=status)
+    return templates.TemplateResponse(
+        request, "demo_notice.html", {"notice": reason}, status_code=status
+    )
+
+
+@app.middleware("http")
+async def demo_guard(request: Request, call_next):
+    """In demo mode, let a write through only to a route a sandbox can take,
+    and hand a visitor the cookie for a sandbox made during the request."""
+    if not demo.ENABLED:
+        return await call_next(request)
+    if request.method not in security.SAFE_METHODS:
+        route_path = _route_path(request.scope)
+        reason = demo.refusal(route_path)
+        if reason is not None:
+            demo.log.info("refused %s %s", request.method, route_path or "(no route)")
+            response = _demo_refused(request, 403, reason)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+    demo.tidy_if_due()
+    try:
+        response = await call_next(request)
+    except Exception:
+        # The request failed outright, so its answer can't carry a cookie:
+        # a sandbox made for it would be one nobody could ever reach.
+        demo.reset(getattr(request.state, "new_sandbox", None))
+        raise
+    token = getattr(request.state, "new_sandbox", None)
+    if token:
+        response.set_cookie(**demo.cookie(token, _is_https(request)))
+    if not request.url.path.startswith("/static/"):
+        # Pages differ per visitor, so nothing between here and the browser
+        # may keep one visitor's copy for the next.
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+# Added last, so it runs first: nothing reaches the app or the demo guard
+# unchecked, and every response leaves with the security headers.
+app.add_middleware(security.Guard)
+
+
+@app.exception_handler(OverflowError)
+async def number_out_of_range(request: Request, exc: OverflowError):
+    """An id too big for SQLite is a bad address, not a server fault."""
+    return PlainTextResponse("Number out of range.", status_code=400)
+
+
+@app.exception_handler(demo.Refused)
+async def demo_refused(request: Request, exc: demo.Refused):
+    return _demo_refused(request, exc.status, exc.reason)
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def database_error(request: Request, exc: sqlite3.OperationalError):
+    """A demo sandbox at its size cap says so; anything else is a fault."""
+    if demo.ENABLED and demo.is_full(exc):
+        return _demo_refused(request, 403, demo.FULL)
+    raise exc
+
+
+@app.exception_handler(Exception)
+async def server_error(request: Request, exc: Exception):
+    """An unexpected failure. This response is sent from outside Guard, so
+    it carries the headers itself; the error is still logged by the server."""
+    return PlainTextResponse(
+        "Internal Server Error", status_code=500, headers=security.REFUSAL_HEADERS
+    )
+
+templates = Jinja2Templates(directory=FRONTEND_DIR)
+templates.env.globals["demo"] = demo
+templates.env.filters["http_url"] = security.clean_url
+
+
+def width_class(percent: float | None) -> str:
+    """'w-37' for 37.2: bar widths as classes, because the content security
+    policy allows no inline styles. style.css defines w-0 to w-100."""
+    return f"w-{min(100, max(0, round(percent or 0)))}"
+
+
+templates.env.filters["width_class"] = width_class
+
+CONVERSATIONS_DIR = demo.CONVERSATIONS_DIR if demo.ENABLED else db.CONVERSATIONS_DIR
 _CONVERSATION_PATH = re.compile(r"data/conversations/([\w./-]+?\.md)")
 # Runs on escaped text, so stop at an entity like &#39;. A bare domain needs a
 # path, which keeps words such as Node.js out.
@@ -76,7 +209,7 @@ _MESSAGE_LINK = re.compile(
 
 def link_conversations(text: str) -> Markup:
     """Notes, escaped, with saved conversation paths turned into links."""
-    return Markup(
+    return Markup(  # nosec B704: the text is escaped first; only matched paths are wrapped
         _CONVERSATION_PATH.sub(
             lambda m: f'<a href="/conversations/{m[1]}">{m[0]}</a>',
             str(escape(text)),
@@ -89,7 +222,7 @@ def _message_link(match: re.Match) -> str:
     if match["email"]:
         return f'<a href="mailto:{match["email"]}">{match["email"]}</a>'
     url = match["url"].rstrip(".,;:!?)]")
-    href = url if "://" in url else f"https://{url}"
+    href = url if url.startswith(("http://", "https://")) else f"https://{url}"
     tail = match["url"][len(url):]
     return f'<a href="{href}" target="_blank" rel="noopener">{url}</a>{tail}'
 
@@ -100,14 +233,27 @@ def render_conversation(text: str) -> Markup:
     html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.M)
     html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.M)
     html = re.sub(r"^\*\*(.+?)\*\*", r"<strong>\1</strong>", html, flags=re.M)
-    return Markup(html)
+    return Markup(html)  # nosec B704: escaped above; tags are added around matches only
 
 
 templates.env.filters["link_conversations"] = link_conversations
 
 
-def get_db():
-    conn = db.get_connection(check_same_thread=False)
+def get_db(request: Request):
+    if demo.ENABLED:
+        # The shared seed, read-only, until this visitor changes something;
+        # from then on their own sandbox. Never the real database.
+        route = request.scope.get("route")
+        conn, made = demo.connection_for(
+            request.method,
+            getattr(route, "path", None),
+            request.cookies.get(demo.cookie_name(_is_https(request))),
+            request.client.host if request.client else None,
+        )
+        if made:
+            request.state.new_sandbox = made  # demo_guard sets the cookie
+    else:
+        conn = db.get_connection(check_same_thread=False)
     try:
         yield conn
     finally:
@@ -320,8 +466,10 @@ def feed_more(
 def job_detail(job_id: int, request: Request, conn=Depends(get_db)):
     """The report beside the feed: full reasons and description for one job."""
     row = db.fetch_job_detail(conn, job_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"no job with id {job_id}")
+    # A gate-rejected job has no score and never appears in the feed, so it
+    # has no report either; a hand-typed id gets a 404, not a template error.
+    if row is None or row["score"] is None:
+        raise HTTPException(status_code=404, detail=f"no scored job with id {job_id}")
     job = dict(row)
     job["breakdown"] = json.loads(job["score_breakdown"]) if job["score_breakdown"] else None
     _attach_contact_badges(conn, [job])
@@ -355,12 +503,18 @@ def restore(job_id: int, conn=Depends(get_db)) -> Response:
 
 
 @app.post("/rescore", response_class=HTMLResponse)
-async def rescore(request: Request, conn=Depends(get_db)):
-    summary = rescore_all(
-        conn, load_profile(PROFILE_PATH), now=datetime.now(timezone.utc)
-    )
-    form = await request.form()  # keep the active search and view
-    q, view = str(form.get("q", "")), str(form.get("view", VIEW_DECIDE))
+def rescore(
+    request: Request,
+    q: str = Form(""),  # the active search and view, kept across the redraw
+    view: str = Form(VIEW_DECIDE),
+    conn=Depends(get_db),
+):
+    # A plain def, so the work runs on a worker thread and other requests
+    # are still answered while it does.
+    with demo.rescore_turn(conn):
+        summary = rescore_all(
+            conn, load_profile(PROFILE_PATH), now=datetime.now(timezone.utc)
+        )
     return templates.TemplateResponse(
         request,
         "_feed.html",
@@ -488,12 +642,15 @@ def application_modal(app_id: int, request: Request, conn=Depends(get_db)):
     )
 
 
-@app.get("/jobs/lookup", response_class=HTMLResponse)
-def lookup_job(request: Request, url: str = "", conn=Depends(get_db)):
+@app.post("/jobs/lookup", response_class=HTMLResponse)
+def lookup_job(request: Request, url: str = Form(""), conn=Depends(get_db)):
     """Fetch a pasted ATS posting URL and prefill the add-job form.
 
     If the posting is already in the database (watched company), offer to
     track the existing job instead of creating a duplicate manual copy.
+
+    A POST although it saves nothing: it makes the app fetch from a job
+    board, and a GET could be set off by a link on any other site.
     """
     def form(**ctx):
         return templates.TemplateResponse(request, "_add_job_form.html", ctx)
@@ -548,8 +705,10 @@ def add_manual_job(
     if not company or not title:
         raise HTTPException(status_code=422, detail="company and title are required")
     url = url.strip()
-    if url and "://" not in url:
-        url = f"https://{url}"
+    if url:
+        url = security.clean_url(url)
+        if url is None:
+            raise HTTPException(status_code=422, detail="url must be a web address")
     description = description.strip() or None
     # Scored like any match (no gates — a hand-added job is wanted by
     # definition); rescores keep it fresh after profile edits.
@@ -641,6 +800,12 @@ async def save_application(app_id: int, request: Request, conn=Depends(get_db)):
         key: str(form.get(key, "")).strip() or None
         for key in ("notes", "resume_version", "next_action", "next_action_due", "applied_at")
     }
+    for key in ("next_action_due", "applied_at"):
+        if fields[key] is not None:
+            try:
+                date.fromisoformat(fields[key])
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"{key} must be a date")
     if not db.update_application_details(conn, app_id, **fields):
         raise HTTPException(status_code=404, detail=f"no application with id {app_id}")
     app_row = _app_dict(db.get_application(conn, app_id))
@@ -721,6 +886,12 @@ _CONTACT_FORM_FIELDS = (
     "verify_flag", "location",
 )
 _CONTACTS_CHANGED = {"HX-Trigger": "contactsChanged"}
+
+
+def _check_link(value: str | None) -> None:
+    """Refuse a profile link that isn't a web address; it's shown as a link."""
+    if value and value.strip() and security.clean_url(value) is None:
+        raise ValueError("LinkedIn URL must be a web address (http or https)")
 
 
 def _contact_view(row, cfg: dict) -> dict:
@@ -827,8 +998,12 @@ def _render_contact_modal(request, conn, contact_id, cfg, *, warnings=(), error=
 def conversation_page(name: str, request: Request):
     """One saved conversation. Only .md files under CONVERSATIONS_DIR."""
     root = CONVERSATIONS_DIR.resolve()
-    path = (root / name).resolve()
-    if path.suffix != ".md" or not path.is_relative_to(root) or not path.is_file():
+    try:
+        path = (root / name).resolve()
+        found = path.suffix == ".md" and path.is_relative_to(root) and path.is_file()
+    except (ValueError, OSError):  # a null byte, a name too long for the disk
+        found = False
+    if not found:
         raise HTTPException(status_code=404, detail="no such conversation")
     return templates.TemplateResponse(
         request,
@@ -857,12 +1032,15 @@ async def contact_update(contact_id: int, request: Request, conn=Depends(get_db)
             if value != row[field]:
                 changes[field] = value
     if "standing_referral" in form:
+        if form["standing_referral"] not in ("0", "1"):
+            raise HTTPException(status_code=422, detail="standing_referral must be 0 or 1")
         wanted = int(form["standing_referral"])
         if wanted != row["standing_referral"]:
             changes["standing_referral"] = wanted
     if form.get("notes", "").strip():
         changes["notes"] = form["notes"]
     try:
+        _check_link(changes.get("linkedin_url"))
         fields, warnings = outreach.plan_update(row, changes, _today(), cfg)
         if "email" in fields:
             others = [c for c in db.fetch_contacts(conn) if c["id"] != contact_id]
@@ -965,6 +1143,7 @@ def contact_add(
         "location": location,
     }
     try:
+        _check_link(linkedin_url)
         fields, warnings = outreach.plan_new_contact(
             {k: v.strip() or None for k, v in submitted.items()}, existing, cfg
         )
@@ -1006,9 +1185,13 @@ def _parse_day(value: str | None) -> date:
     if not value:
         return date.today()
     try:
-        return date.fromisoformat(value)
+        day = date.fromisoformat(value)
     except ValueError:
         raise HTTPException(400, "day must be an ISO date")
+    # The week around a day at either end of the calendar can't be computed.
+    if not 2000 <= day.year <= 2100:
+        raise HTTPException(400, "day is out of range")
+    return day
 
 
 def _schedule_context(conn, day: date) -> dict:
@@ -1208,6 +1391,22 @@ def rejected_groups_partial(request: Request, q: str = "", conn=Depends(get_db))
     )
 
 
+@app.post(demo.RESET_PATH)
+def demo_reset(request: Request):
+    """Throw away the visitor's sandbox: back to the demo as it started."""
+    if not demo.ENABLED:
+        raise HTTPException(status_code=404)
+    https = _is_https(request)
+    name = demo.cookie_name(https)
+    demo.reset(request.cookies.get(name))
+    response = RedirectResponse("/", status_code=303)
+    response.delete_cookie(name, path="/", secure=https, httponly=True, samesite="lax")
+    return response
+
+
 @app.get("/health")
 def health(conn=Depends(get_db)) -> dict:
+    if demo.ENABLED:
+        # Says only what a deploy check needs: it is the demo, and which build.
+        return {"status": "ok", "demo": True, "sha": demo.git_sha()}
     return {"status": "ok", "tables": db.table_names(conn)}

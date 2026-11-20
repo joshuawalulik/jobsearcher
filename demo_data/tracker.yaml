@@ -1,0 +1,349 @@
+# Scripted applications for the demo tracker (demo_seed.py). All invented.
+#
+# Each entry gets its own posting, built from demo_data/jobs.yaml and scored
+# by the real pipeline, then a lane history replayed as events.
+#
+#   steps        [when, lane] in order; the first is the day the job was tracked.
+#                when is a count of workdays before the anchor day (0 = the
+#                anchor itself), or "sunday" for the last Sunday before it.
+#                A trailing third item gives the earliest slot of the day the
+#                step exists in (1 = after the morning sweep, 2 = after the
+#                afternoon one), used only for steps on the anchor day.
+#   seen_before  calendar days between the posting's first_seen and tracking.
+#   due          next_action_due, in days from the anchor.
+
+excused_workday: 9          # this many workdays back is an excused day
+excused_reason: Traveling for a family event
+
+applications:
+  # --- offer ---
+  - key: offer
+    company: Lumenfield
+    title: "Software Engineer, Dashboards"
+    stack: core
+    years: 3
+    location: nyc_hybrid
+    seen_before: 1
+    steps: [[38, considering], [37, ready], [37, applied], [30, interviewing], [4, offer]]
+    resume: Lumenfield_v1
+    notes: "Hiring screen: Go. Strong match on React and Python, team works on the dashboards customers see every day.\nOnsite went well; the system design round was on metric rollups."
+    next_action: Review the offer letter and reply to Jordan
+    due: 2
+
+  # --- interviewing ---
+  - key: int_acme
+    company: Acme Corp
+    title: "Software Engineer, Payments"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 1
+    steps: [[16, considering], [15, ready], [15, applied], [6, interviewing]]
+    resume: AcmeCorp_v1
+    notes: "Hiring screen: Go. Payments domain is new to me; lead with the ledger reconciliation project."
+    next_action: Technical interview with the Payments team, 2 PM
+    due: 1
+  - key: int_contoso
+    company: Contoso
+    title: "Full Stack Engineer, Editor"
+    stack: core
+    years: 3
+    location: nyc_hybrid
+    seen_before: 2
+    steps: [[12, considering], [11, ready], [11, applied], [3, interviewing]]
+    resume: Contoso_v1
+    next_action: Send availability for the hiring manager call
+    due: 0
+  - key: int_harbor
+    company: Harborlight Health
+    title: "Software Engineer II, Member Experience"
+    stack: partial
+    years: 4
+    location: nyc
+    seen_before: 6
+    steps: [[22, considering], [20, ready], [20, applied], [8, interviewing]]
+    resume: HarborlightHealth_v1
+    notes: "Hiring screen: Apply with caveats. They ask for 4 years; I have 3."
+    next_action: Finish the take-home and send it back
+    due: 3
+
+  # --- rejected ---
+  - key: rej_oakbridge
+    company: Oakbridge Financial
+    title: "Software Engineer, Lending"
+    stack: core
+    years: 4
+    location: nyc
+    seen_before: 1
+    steps: [[36, considering], [35, applied], [27, interviewing], [19, rejected]]
+    resume: OakbridgeFinancial_v1
+    notes: "Reached the final round. Feedback: wanted more lending domain experience."
+  - key: rej_globex
+    company: Globex
+    title: "Backend Engineer, Billing"
+    stack: backend
+    years: 5
+    location: nyc
+    seen_before: 7
+    steps: [[34, considering], [32, applied], [24, rejected]]
+    resume: General_v3
+  - key: rej_tailspin
+    company: Tailspin
+    title: "Senior Software Engineer, Booking"
+    stack: core
+    years: 6
+    location: nyc
+    seen_before: 9
+    steps: [[30, considering], [29, applied], [21, rejected]]
+    resume: General_v3
+    notes: "A stretch: senior title, 6+ years."
+  - key: rej_kestrel
+    company: Kestrel Systems
+    title: "Software Engineer, Console"
+    stack: offstack
+    years: 3
+    location: nyc
+    seen_before: 5
+    steps: [[28, considering], [26, applied], [14, rejected]]
+    resume: General_v3
+  - key: rej_wingtip
+    company: Wingtip
+    title: "Frontend Engineer, Storefront"
+    stack: frontend
+    years: 3
+    location: nyc_hybrid
+    seen_before: 4
+    steps: [[25, considering], [24, applied], [17, rejected]]
+    resume: Wingtip_v1
+  - key: rej_fabrikam
+    company: Fabrikam
+    title: "Full Stack Engineer, Patient Portal"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 2
+    steps: [[21, considering], [20, applied], [13, interviewing], [8, rejected]]
+    resume: Fabrikam_v1
+    notes: "Phone screen went fine, no second round."
+  - key: rej_stackyard
+    company: Stackyard
+    title: "Software Engineer, Control Plane"
+    stack: backend
+    years: 4
+    location: remote_us
+    seen_before: 3
+    steps: [[18, considering], [17, applied], [5, rejected]]
+    resume: Stackyard_v1
+
+  # --- applied ---
+  - key: app_quillstone
+    company: Quillstone
+    title: "Software Engineer, Subscriptions"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 1
+    steps: [[13, considering], [12, ready], [12, applied]]
+    resume: Quillstone_v1
+    next_action: Follow up with the recruiter if it's still quiet
+    due: -1
+  - key: app_acme
+    company: Acme Corp
+    title: "Software Engineer, Merchant Dashboard"
+    stack: core
+    years: 2
+    location: nyc
+    seen_before: 2
+    steps: [[11, considering], [10, applied]]
+    resume: AcmeCorp_v2
+  - key: app_contoso
+    company: Contoso
+    title: "Software Engineer, Search"
+    stack: partial
+    years: 3
+    location: nyc
+    seen_before: 8
+    steps: [[12, considering], [10, applied]]
+    resume: Contoso_v2
+  - key: app_northwind
+    company: Northwind Labs
+    title: "Full Stack Engineer"
+    stack: core
+    years: 3
+    location: nyc_hybrid
+    seen_before: 1
+    steps: [[8, considering], [7, ready], [7, applied]]
+    resume: NorthwindLabs_v1
+  - key: app_pallet
+    company: "Pallet & Pine"
+    title: "Full Stack Engineer, Marketplace"
+    stack: core
+    years: 2
+    location: nyc
+    seen_before: 1
+    steps: [[7, considering], [6, applied]]
+    resume: PalletPine_v1
+  - key: app_lumenfield
+    company: Lumenfield
+    title: "Backend Engineer, Data Pipeline"
+    stack: backend
+    years: 3
+    location: remote_us
+    seen_before: 3
+    steps: [[6, considering], [5, applied]]
+    resume: Lumenfield_v2
+  - key: app_harbor
+    company: Harborlight Health
+    title: "Software Engineer, Care Team Tools"
+    stack: core
+    years: 3
+    location: nyc_hybrid
+    seen_before: 1
+    steps: [[5, considering], [4, ready], [4, applied]]
+    resume: HarborlightHealth_v2
+  - key: app_copperline
+    company: Copperline
+    title: "Software Engineer, Customer Portal"
+    stack: partial
+    years: 3
+    location: nyc
+    seen_before: 10
+    steps: [[4, considering], [3, applied]]
+    resume: General_v3
+  - key: app_brightwater
+    company: Brightwater
+    title: "Full Stack Engineer, Field App"
+    stack: core
+    years: 4
+    location: nyc
+    seen_before: 2
+    steps: [[3, considering], [2, ready], [0, applied, 2]]
+    resume: Brightwater_v1
+  - key: app_globex
+    company: Globex
+    title: "Software Engineer, Integrations"
+    stack: core
+    years: 3
+    location: nyc_hybrid
+    seen_before: 1
+    steps: [[3, considering], [2, ready], [2, applied]]
+    resume: Globex_v1
+    notes: "Submitted through Pat Doe at Example Staffing."
+  - key: app_wingtip
+    company: Wingtip
+    title: "Software Engineer, Payments"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 2
+    steps: [[7, considering], [sunday, applied]]
+    resume: Wingtip_v2
+
+  # --- ready ---
+  - key: ready_oakbridge
+    company: Oakbridge Financial
+    title: "Software Engineer, Cards"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 1
+    steps: [[2, considering], [1, ready]]
+    resume: OakbridgeFinancial_v2
+    next_action: Submit on the careers site, then message the recruiter
+    due: 0
+  - key: ready_tailspin
+    company: Tailspin
+    title: "Full Stack Engineer, Policy Engine"
+    stack: core
+    years: 3
+    location: remote_us
+    seen_before: 1
+    steps: [[1, considering], [0, ready, 1]]
+    resume: Tailspin_v1
+
+  # --- considering ---
+  - key: con_contoso
+    company: Contoso
+    title: "Software Engineer, Identity"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 2
+    steps: [[3, considering]]
+    notes: "Priya can refer me here; ask her before applying."
+  - key: con_acme
+    company: Acme Corp
+    title: "Software Engineer, Developer Platform"
+    stack: backend
+    years: 4
+    location: nyc
+    seen_before: 1
+    steps: [[2, considering]]
+  - key: con_stackyard
+    company: Stackyard
+    title: "Full Stack Engineer, Developer Experience"
+    stack: core
+    years: 3
+    location: nyc
+    seen_before: 1
+    steps: [[1, considering]]
+  - key: con_marlowe
+    company: Marlowe Robotics
+    title: "Software Engineer, Operator Console"
+    stack: partial
+    years: 3
+    location: nyc
+    seen_before: 3
+    steps: [[1, considering]]
+  - key: con_fernhollow
+    company: Fernhollow
+    title: "Full Stack Engineer"
+    stack: core
+    years: 2
+    location: nyc_hybrid
+    seen_before: 0
+    steps: [[0, considering, 1]]
+
+  # --- skipped (decided against at the hiring screen) ---
+  - key: skip_vantage
+    company: Vantage Federal
+    title: "Software Engineer, Mission Systems"
+    stack: core
+    years: 3
+    location: nyc
+    clearance: true
+    seen_before: 1
+    steps: [[14, considering], [14, skipped]]
+    notes: "Hiring screen: Skip. Requires an active clearance."
+  - key: skip_kestrel
+    company: Kestrel Systems
+    title: "Senior Software Engineer, Query Engine"
+    stack: offstack
+    years: 8
+    location: nyc
+    seen_before: 2
+    steps: [[11, considering], [11, skipped]]
+    notes: "Hiring screen: Skip. Asks for 8+ years and the stack is Go."
+  - key: skip_initech
+    company: Initech
+    title: "Software Engineer, Claims"
+    stack: core
+    years: 3
+    location: austin
+    seen_before: 1
+    steps: [[6, considering], [6, skipped]]
+    notes: "Hiring screen: Skip. Austin only, no remote option."
+
+# One job added by hand on the tracker (ats_type 'manual'): never swept or
+# gated, scored at creation.
+manual:
+  key: con_manual
+  company: Hartwell & Reed
+  title: "Software Engineer"
+  stack: core
+  years: 3
+  location: nyc
+  steps: [[4, considering]]
+  notes: "From Tomas. Their careers page isn't on a board the sweep reads, so this was added by hand."
+  next_action: Ask Tomas who the hiring manager is
+  due: 1

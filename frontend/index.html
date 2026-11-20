@@ -24,42 +24,4 @@
   </div>
   <aside id="report" class="report" aria-label="Job detail"></aside>
 </div>
-<script>
-  // Row clicks open the report, except clicks meant for the row's controls.
-  function opensJob(evt) {
-    return !evt.target.closest("a, button");
-  }
-  // The report says which job it shows; the list highlights that row.
-  document.addEventListener("htmx:afterSwap", function (evt) {
-    if (evt.detail.target.id !== "report") return;
-    evt.detail.target.scrollTop = 0;
-    var shown = evt.detail.target.querySelector("[data-job]");
-    document.querySelectorAll(".job-row.sel").forEach(function (row) {
-      row.classList.remove("sel");
-    });
-    var row = shown && document.getElementById("job-" + shown.dataset.job);
-    if (row) row.classList.add("sel");
-    // Narrow screens stack the report under the list, so take the click to it.
-    var cause = evt.detail.requestConfig && evt.detail.requestConfig.triggeringEvent;
-    if (cause && window.innerWidth <= 1050) evt.detail.target.scrollIntoView();
-  });
-  // Dismissing drops the row and moves the report on to the next job.
-  function dropRow(jobId) {
-    var row = document.getElementById("job-" + jobId);
-    if (!row) return;
-    var next = row.nextElementSibling;
-    var wasShown = row.classList.contains("sel");
-    row.remove();
-    if (!wasShown) return;
-    if (next && next.classList.contains("job-row")) next.click();
-    else document.getElementById("report").innerHTML = "";
-  }
-  // Tracking from the row refreshes the report if it shows that job.
-  document.addEventListener("jobTracked", function (evt) {
-    var jobId = evt.detail.value;
-    if (document.querySelector('#report [data-job="' + jobId + '"]')) {
-      htmx.ajax("GET", "/jobs/" + jobId + "/detail", "#report");
-    }
-  });
-</script>
 {% endblock %}

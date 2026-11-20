@@ -37,7 +37,7 @@ def client(tmp_path):
     db_path = tmp_path / "test.db"
     conn = db.get_connection(db_path)
     db.init_db(conn)
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://localhost")
     client.job_ids = seed(conn)
     client.db = conn
 
@@ -135,7 +135,7 @@ def test_tracker_card_opens_modal_on_click(client):
     page = client.get("/tracker").text
     assert f'hx-get="/applications/{app_id}/modal"' in page
     assert 'id="modal"' in page
-    assert "opensAppModal" in page  # click filter skips the card's controls
+    assert "data-opens" in page  # app.js opens it, skipping the card's controls
 
 
 def test_tracker_page_renders_lanes_and_card(client):
