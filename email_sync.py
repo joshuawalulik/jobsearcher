@@ -472,6 +472,22 @@ def _connect(cfg: dict, secrets: dict) -> imaplib.IMAP4_SSL:
     return conn
 
 
+def search_terms(company: str, cfg: dict) -> list[str]:
+    """What to search the mailbox for: the company's DB name plus any
+    spellings grouped with it in email.search_aliases (case-blind). A
+    deliberate list, separate from outreach.company_aliases, because a
+    search term is a net: bare "Chase" would pull in banking mail."""
+    terms = [company]
+    lowered = {company.lower()}
+    for group in cfg.get("search_aliases") or []:
+        if any(str(name).lower() in lowered for name in group):
+            for name in group:
+                if str(name).lower() not in lowered:
+                    terms.append(str(name))
+                    lowered.add(str(name).lower())
+    return terms
+
+
 def _search_uids(imap, company: str, since: str) -> list[str]:
     """Server-side search: company name in From or Subject, recent only."""
     status, data = imap.uid(
@@ -513,12 +529,15 @@ def _scan(imap, cfg: dict, by_company: dict, seen: set[str], now: datetime):
     since = (now - timedelta(days=cfg["lookback_days"])).strftime("%d-%b-%Y")
     for _, apps in sorted(by_company.items()):
         company = apps[0]["company"]
-        for uid in _search_uids(imap, company, since):
-            if uid in seen:
-                continue
-            msg = _fetch_message(imap, uid)
-            if msg is not None:
-                yield company, apps, msg, triage(msg, cfg)
+        found: set[str] = set()
+        for term in search_terms(company, cfg):
+            for uid in _search_uids(imap, term, since):
+                if uid in seen or uid in found:
+                    continue
+                found.add(uid)
+                msg = _fetch_message(imap, uid)
+                if msg is not None:
+                    yield company, apps, msg, triage(msg, cfg)
 
 
 def sync(conn, profile: dict, *, secrets: dict | None = None, imap=None,

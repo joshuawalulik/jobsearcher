@@ -346,6 +346,11 @@ email:                # inbox → tracker suggestions (creds in git-ignored conf
   # Mail older than an application by more than this can't be about it
   # (the grace covers jobs tracked a few days after applying).
   application_grace_days: 3
+  # Extra mailbox search spellings, grouped with the company's DB name
+  # (case-blind). Keep each term tight: it is a net over From/Subject,
+  # so a sender-domain fragment beats a common word.
+  search_aliases:
+    - [Acme, acmecorp]
   # Filtered before anything else; matched against the From address.
   # Filtered mail stays listed on the tracker with its reason.
   ignore_senders:
