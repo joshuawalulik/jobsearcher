@@ -817,3 +817,19 @@ def test_connect_passes_the_timeout_to_imaplib(monkeypatch):
         {"username": "alex@example.com", "app_password": "x"},
     )
     assert seen == {"host": "imap.example.com", "timeout": 20.0, "login": "alex@example.com"}
+
+
+def test_search_terms_without_aliases_is_just_the_company():
+    assert email_sync.search_terms("Acme", {}) == ["Acme"]
+    assert email_sync.search_terms("Acme", {"search_aliases": []}) == ["Acme"]
+
+
+def test_search_terms_adds_the_grouped_spellings_case_blind():
+    cfg = {"search_aliases": [["Acme Corp", "acmecorp"], ["Globex", "globexhq"]]}
+    assert email_sync.search_terms("ACME CORP", cfg) == ["ACME CORP", "acmecorp"]
+    assert email_sync.search_terms("Initech", cfg) == ["Initech"]
+
+
+def test_search_terms_never_repeats_a_spelling():
+    cfg = {"search_aliases": [["Acme", "acme", "acmecorp"], ["Acme", "acmehq"]]}
+    assert email_sync.search_terms("Acme", cfg) == ["Acme", "acmecorp", "acmehq"]
