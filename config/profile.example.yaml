@@ -490,3 +490,6 @@ email:                # inbox → tracker suggestions (creds in git-ignored conf
     - application to
     - your candidacy
     - application status
+    # Status touchpoints from TA inboxes often match nothing else.
+    - under (active )?consideration
+    - no decision has been made
