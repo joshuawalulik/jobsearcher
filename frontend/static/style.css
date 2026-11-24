@@ -199,7 +199,7 @@ details.lane:not([open]) > summary { writing-mode: vertical-rl; padding: 9px 7px
 .email-suggestion { margin: 8px -10px -9px; padding: 8px 10px 9px; background: var(--accent-soft); border-radius: 0 0 4px 4px; font-size: 12.5px; }
 .email-suggestion p { margin: 0 0 6px; }
 .email-suggestion .lead { color: var(--accent); font-weight: 600; display: flex; gap: 5px; align-items: center; }
-.email-evidence { display: block; color: #d6e2f5; quotes: none; margin-top: 3px; }
+.email-evidence { display: block; color: #d6e2f5; quotes: none; margin-top: 3px; overflow-wrap: anywhere; }
 .suggestion-mail { color: var(--muted); overflow-wrap: anywhere; }
 .email-suggestion .acts { display: flex; gap: 4px; flex-wrap: wrap; }
 .email-suggestion .accept { background: var(--accent); border-color: var(--accent); color: var(--bg); }
